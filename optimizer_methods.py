@@ -5,6 +5,8 @@ Created on Tue May  1 05:13:09 2018
 @author: Matt
 """
 
+
+
 import tensorflow as tf
 import numpy as np
 from misc_functions import display
@@ -66,7 +68,7 @@ def pca(X,n_dims=None):
     if n_dims is None:
         n_dims = np.shape(X)[1]
     
-    Xc = X - np.sum((1/np.shape(X)[0])*X,0)
+    Xc = X - np.mean(X,0)
     
     L,P = np.linalg.eig(np.dot(Xc.T,Xc))
     
