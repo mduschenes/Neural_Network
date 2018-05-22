@@ -102,20 +102,9 @@ class optimizer(object):
 
 
         
-        data, data_size = Data_Process().importer(data_params)
+        data,data_size,data_typed,data_keys=Data_Process().importer(data_params)
 
-                       
-        # Organize data by data_types (train, test, other),
-        # and sorted in the the order of x,y, where it is assumed data_sets is
-        # of the form ['x_train','y_train','x_test','y_test',*vars_other]
-        data_typed = {t: [data[k] 
-                          for k in data_params['data_sets'] if t in k]
-                          for t in data_params['data_types']}
-        data_sets=   {t: [k 
-                          for k in data_params['data_sets'] if t in k]
-                          for t in data_params['data_types']}
-        
-        
+                      
         
         display(True,True,'Data Imported...%s'%data_size)
                 
@@ -254,7 +243,7 @@ class optimizer(object):
                                 'xlabel': 'Epochs' if k 
                                            not in results_keys['other'] 
                                            else 
-                                           caps(str(data_sets['other'][0]
+                                           caps(str(data_keys['other'][0]
                                                 ).replace('_other','')), 
                                 'ylabel': caps(k,True,split_char='_')
                                 },
@@ -356,7 +345,8 @@ class optimizer(object):
             
                     # Save and Plot Data
                     #list(range(*i))) #domain(epoch+1),
-                    Data_Proc.plotter(results,list(range(0,epoch+1,alg_params['n_epochs_meas'])),
+                    Data_Proc.plotter(results,list(range(0,epoch+1,
+											      alg_params['n_epochs_meas'])),
                                       plot_params,
                                       'Testing and Training')
             
@@ -417,8 +407,9 @@ class optimizer(object):
                                                          results_keys['train']+
                                                          results_keys['test'],
                                          'Other': results_keys['other']})
-            Data_Proc_Final.plotter(results,list(range(0,epoch+1,alg_params['n_epochs_meas'])),plot_params,
-                                      'Testing and Training')
+            Data_Proc_Final.plotter(results,list(range(0,epoch+1,
+									alg_params['n_epochs_meas'])),
+									plot_params, 'Testing and Training')
             if other:
                 for i in range(len(data_typed['other'])):
                     Data_Proc_Final.plotter({k: v[i] 

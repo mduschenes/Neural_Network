@@ -13,15 +13,45 @@
 #  Copyright (c) 2008 Tilburg University. All rights reserved.
 
 import numpy as np
-
-import sys
-sys.path.insert(0, "C:/Users/Matt/Google Drive/PSI/"+
-				   "PSI Essay/PSI Essay Python Code/tSNE_Potts/")
+import argparse
+# import sys
+# sys.path.insert(0, "C:/Users/Matt/Google Drive/PSI/"+
+				   # "PSI Essay/PSI Essay Python Code/tSNE_Potts/")
 
 from data_functions import Data_Process 
 from misc_functions import dict_modify,display
 
 
+TOL_MIN = 1e-14
+
+
+parser = argparse.ArgumentParser(description = "Parse Arguments")
+
+# Add Model Args
+parser.add_argument('-N0','--N0',help = 'Number of Initial Dimensions',
+					type=int,default=None)
+
+parser.add_argument('-N','--N',help = 'Number of Final Dimensions',
+					type=int,default=2)#
+					
+parser.add_argument('-P','--perp',help = 'Perplexity',
+					type=float,default=30.0)#
+					
+parser.add_argument('-pca','--pca',help = 'Initially Perform PCA',
+					type=bool,default=True)#
+
+parser.add_argument('-repeat','--repeat',help = 'Repeat tSNE',
+					type=bool,default=False)
+					
+parser.add_argument('--data_dir',help = 'Data Directory',
+					type=str,default='dataset/tsne/')
+					
+parser.add_argument('--file_dir',help = 'File Data Directory',
+					type=str,default='dataset/tsne/')
+					
+# Parse Args Command
+args = parser.parse_args()
+					
 # Compute Squared Pairwise distance between all elements in x
 def pairwise_distance(x):
 	x2 =  np.dot(x,x.T) 
@@ -35,17 +65,17 @@ def neighbour_distance(x,n):
 	return pairwise_distance(x)[~np.eye(n,dtype=bool)].reshape(n,n-1)
 
 # Compute guassian representation of pairwise distances
-def rep_gaussian(d,sigma,normalized=True,tol=1e-14):
+def rep_gaussian(d,sigma,normalized=True):
 	p = np.atleast_2d(np.exp(-d*sigma))
 	np.fill_diagonal(p,0)
 	if normalized: return p/np.sum(p,axis=1)
-	else: return p,np.maximum(np.sum(p,axis=1),tol)
+	else: return p,np.maximum(np.sum(p,axis=1),TOL_MIN)
 
-def rep_tdistribution(d,sigma,normalized=True,tol=1e-14):
+def rep_tdistribution(d,sigma,normalized=True):
 	p = np.power(1+d,-1)
 	np.fill_diagonal(p,0)
 	if normalized: return p/np.sum(p,axis=1)
-	else: return p,np.maximum(np.sum(p,axis=1),tol)
+	else: return p,np.maximum(np.sum(p,axis=1),TOL_MIN)
 	
 
 def entropy(p,q,axis=-1):
@@ -121,9 +151,9 @@ def Hbeta(D=np.array([]), beta=1.0):
 
 	# Compute P-row and corresponding perplexity
 	P = np.exp(-D.copy() * beta)
-	sumP = np.maximum(np.sum(P,axis=-1),10**(-14))
+	sumP = np.maximum(np.sum(P,axis=-1),TOL_MIN)
 	H = np.log(sumP) + beta * np.sum(D * P) / sumP
-	P = P / sumP
+	P /= sumP
 	return H, P
 
 
@@ -151,7 +181,7 @@ def x2p(X=np.array([]),f=Hbeta, tol=1e-5, perplexity=30.0,n_iter=50):
 		# Compute the Gaussian kernel and entropy for the current precision
 		betamin = -np.inf
 		betamax = np.inf
-		Di = X[i, np.concatenate((np.r_[0:i], np.r_[i+1:n]))]
+		Di = X[i, np.append(np.r_[0:i], np.r_[i+1:n])]
 		(H, thisP) = f(Di, beta[i])
 
 		# Evaluate whether the perplexity is within tolerance
@@ -200,40 +230,40 @@ def pca(X,n_dims=None):
 	return np.dot(Xc,P[:, 0:n_dims]), L/np.sum(L),P
 
 
-def tsne(X=np.array([]), no_dims=2, initial_dims=50, perplexity=30.0):
+def tsne(X=np.array([]), N=2, N0=50, perplexity=30.0):
 	"""
 		Runs t-SNE on the dataset in the NxD array X to reduce its
-		dimensionality to no_dims dimensions. The syntaxis of the function is
-		`Y = tsne.tsne(X, no_dims, perplexity), where X is an NxD NumPy array.
+		dimensionality to N dimensions. The syntaxis of the function is
+		`Y = tsne.tsne(X, N, perplexity), where X is an NxD NumPy array.
 	"""
 
 	# Check inputs
-	if isinstance(no_dims, float):
+	if isinstance(N, float):
 		print("Error: array X should have type float.")
 		return -1
-	if round(no_dims) != no_dims:
+	if round(N) != N:
 		print("Error: number of dimensions should be an integer.")
 		return -1
 
 	# Initialize variables
-	X,_,_ = pca(X, initial_dims)
+	X,_,_ = pca(X, N0)
 	(n, d) = X.shape
 	max_iter = 1000
 	initial_momentum = 0.5
 	final_momentum = 0.8
 	eta = 500
 	min_gain = 0.01
-	Y = np.random.randn(n, no_dims)
-	dY = np.zeros((n, no_dims))
-	iY = np.zeros((n, no_dims))
-	gains = np.ones((n, no_dims))
+	Y = np.random.randn(n, N)
+	dY = np.zeros((n, N))
+	iY = np.zeros((n, N))
+	gains = np.ones((n, N))
 
 	# Compute P-values
 	P = x2p(X, 1e-5, perplexity)
-	P = P + np.transpose(P)
-	P = P / np.sum(P)
-	P = P * 4.									# early exaggeration
-	P = np.maximum(P, 1e-12)
+	P += np.transpose(P)
+	P /= np.maximum(np.sum(P),TOL_MIN)
+	P *= 4.									# early exaggeration
+	P = np.maximum(P, TOL_MIN)
 
 	# Run iterations
 	display(True,True,'Iterations for t-SNE')
@@ -245,13 +275,13 @@ def tsne(X=np.array([]), no_dims=2, initial_dims=50, perplexity=30.0):
 		num = -2. * np.dot(Y, Y.T)
 		num = 1. / (1. + np.add(np.add(num, sum_Y).T, sum_Y))
 		num[range(n), range(n)] = 0.
-		Q = num / np.sum(num)
-		Q = np.maximum(Q, 1e-12)
+		Q = num / np.maximum(np.sum(num),TOL_MIN)
+		Q = np.maximum(Q, TOL_MIN)
 
 		# Compute gradient
 		PQ = P - Q
 		for nn in range(n):
-			dY[i, :] = np.sum(np.tile(PQ[:, i] * num[:, i], (no_dims, 1)).T * (Y[i, :] - Y), 0)
+			dY[i, :] = np.sum(np.tile(PQ[:, i] * num[:, i], (N, 1)).T * (Y[i, :] - Y), 0)
 
 		# Perform the update
 		if i < 20:
@@ -278,170 +308,184 @@ def tsne(X=np.array([]), no_dims=2, initial_dims=50, perplexity=30.0):
 	return Y
 	
 def Hbeta0(D=np.array([]), beta=1.0):
-    """
-        Compute the perplexity and the P-row for a specific value of the
-        precision of a Gaussian distribution.
-    """
+	"""
+		Compute the perplexity and the P-row for a specific value of the
+		precision of a Gaussian distribution.
+	"""
 
-    # Compute P-row and corresponding perplexity
-    P = np.exp(-D.copy() * beta)
-    sumP = np.maximum(sum(P),10e-12)
-    H = np.log(sumP) + beta * np.sum(D * P) / sumP
-    P = P / sumP
-    return H, P
+	# Compute P-row and corresponding perplexity
+	#print('limits',np.max(D),np.min(D),beta)
+	P = np.exp(-D.copy() * beta)
+	sumP = np.maximum(sum(P),TOL_MIN)
+	H = np.log(sumP) + beta * np.sum(D * P) / sumP
+	P /= sumP
+	return H, P
 
 
 def x2p0(X=np.array([]), tol=1e-5, perplexity=30.0):
-    """
-        Performs a binary search to get P-values in such a way that each
-        conditional Gaussian has the same perplexity.
-    """
+	"""
+		Performs a binary search to get P-values in such a way that each
+		conditional Gaussian has the same perplexity.
+	"""
 
-    # Initialize some variables
-    print("Computing pairwise distances...")
-    (n, d) = X.shape
-    sum_X = np.sum(np.square(X), 1)
-    D = np.add(np.add(-2 * np.dot(X, X.T), sum_X).T, sum_X)
-    P = np.zeros((n, n))
-    beta = np.ones((n, 1))
-    logU = np.log(perplexity)
+	# Initialize some variables
+	print("Computing pairwise distances...")
+	(n, d) = X.shape
+	sum_X = np.sum(np.square(X), 1)
+	D = np.abs(np.add(np.add(-2 * np.dot(X, X.T), sum_X).T, sum_X))
+	P = np.zeros((n, n))
+	beta = np.ones((n, 1))
+	logU = np.log(perplexity)
 
-    # Loop over all datapoints
-    for i in range(n):
+	# Loop over all datapoints
+	for i in range(n):
 
-        # Print progress
-        if i % 500 == 0:
-            print("Computing P-values for point %d of %d..." % (i, n))
+		# Print progress
+		if i % 500 == 0:
+			print("Computing P-values for point %d of %d..." % (i, n))
 
-        # Compute the Gaussian kernel and entropy for the current precision
-        betamin = -np.inf
-        betamax = np.inf
-        Di = D[i, np.concatenate((np.r_[0:i], np.r_[i+1:n]))]
-        (H, thisP) = Hbeta0(Di, beta[i])
+		# Compute the Gaussian kernel and entropy for the current precision
+		betamin = -np.inf
+		betamax = np.inf
+		Di = D[i, np.append(np.r_[0:i], np.r_[i+1:n])]
+		(H, thisP) = Hbeta0(Di, beta[i])
 
-        # Evaluate whether the perplexity is within tolerance
-        Hdiff = H - logU
-        tries = 0
-        while np.abs(Hdiff) > tol and tries < 50:
+		# Evaluate whether the perplexity is within tolerance
+		Hdiff = H - logU
+		tries = 0
+		while np.abs(Hdiff) > tol and tries < 50:
+			# If not, increase or decrease precision
+			if Hdiff > 0:
+				betamin = beta[i].copy()
+				if betamax == np.inf or betamax == -np.inf:
+					beta[i] = beta[i] * 2.
+				else:
+					beta[i] = (beta[i] + betamax) / 2.
+			else:
+				betamax = beta[i].copy()
+				if betamin == np.inf or betamin == -np.inf:
+					beta[i] = beta[i] / 2.
+				else:
+					beta[i] = (beta[i] + betamin) / 2.
 
-            # If not, increase or decrease precision
-            if Hdiff > 0:
-                betamin = beta[i].copy()
-                if betamax == np.inf or betamax == -np.inf:
-                    beta[i] = beta[i] * 2.
-                else:
-                    beta[i] = (beta[i] + betamax) / 2.
-            else:
-                betamax = beta[i].copy()
-                if betamin == np.inf or betamin == -np.inf:
-                    beta[i] = beta[i] / 2.
-                else:
-                    beta[i] = (beta[i] + betamin) / 2.
+			# Recompute the values
+			#print('B,H,Perp',beta[i],Hdiff,perplexity)
+			(H, thisP) = Hbeta0(Di, beta[i])
+			Hdiff = H - logU
+			tries += 1
 
-            # Recompute the values
-            (H, thisP) = Hbeta0(Di, beta[i])
-            Hdiff = H - logU
-            tries += 1
+		# Set the final row of P
+		P[i, np.concatenate((np.r_[0:i], np.r_[i+1:n]))] = thisP
 
-        # Set the final row of P
-        P[i, np.concatenate((np.r_[0:i], np.r_[i+1:n]))] = thisP
-
-    # Return final P-matrix
-    print("Mean value of sigma: %f" % np.mean(np.sqrt(1 / beta)))
-    return P
-
-
-def pca0(X=np.array([]), no_dims=50):
-    """
-        Runs PCA on the NxD array X in order to reduce its dimensionality to
-        no_dims dimensions.
-    """
-
-    print("Preprocessing the data using PCA...")
-    (n, d) = X.shape
-    X = X - np.tile(np.mean(X, 0), (n, 1))
-    (l, M) = np.linalg.eig(np.dot(X.T, X))
-    Y = np.dot(X, M[:, 0:no_dims])
-    return Y
+	# Return final P-matrix
+	print("Mean value of sigma: %f" % np.mean(np.sqrt(1 / beta)),Hdiff)
+	return P
 
 
-def tsne0(X=np.array([]), no_dims=2, initial_dims=50, perplexity=30.0):
-    """
-        Runs t-SNE on the dataset in the NxD array X to reduce its
-        dimensionality to no_dims dimensions. The syntaxis of the function is
-        `Y = tsne.tsne(X, no_dims, perplexity), where X is an NxD NumPy array.
-    """
+def pca0(X=np.array([]), N0=50):
+	"""
+		Runs PCA on the NxD array X in order to reduce its dimensionality to
+		N dimensions.
+	"""
 
-    # Check inputs
-    if isinstance(no_dims, float):
-        print("Error: array X should have type float.")
-        return -1
-    if round(no_dims) != no_dims:
-        print("Error: number of dimensions should be an integer.")
-        return -1
-
-    # Initialize variables
-    X = pca0(X, initial_dims).real
-    (n, d) = X.shape
-    max_iter = 1000
-    initial_momentum = 0.5
-    final_momentum = 0.8
-    eta = 500
-    min_gain = 0.01
-    Y = np.random.randn(n, no_dims)
-    dY = np.zeros((n, no_dims))
-    iY = np.zeros((n, no_dims))
-    gains = np.ones((n, no_dims))
-
-    # Compute P-values
-    P = x2p0(X, 1e-5, perplexity)
-    P = P + np.transpose(P)
-    P = P / np.sum(P)
-    P = P * 4.									# early exaggeration
-    P = np.maximum(P, 1e-12)
-
-    # Run iterations
-    for iter in range(max_iter):
-
-        # Compute pairwise affinities
-        sum_Y = np.sum(np.square(Y), 1)
-        num = -2. * np.dot(Y, Y.T)
-        num = 1. / (1. + np.add(np.add(num, sum_Y).T, sum_Y))
-        num[range(n), range(n)] = 0.
-        Q = num / np.sum(num)
-        Q = np.maximum(Q, 1e-12)
-
-        # Compute gradient
-        PQ = P - Q
-        for i in range(n):
-            dY[i, :] = np.sum(np.tile(PQ[:, i] * num[:, i], (no_dims, 1)).T * (Y[i, :] - Y), 0)
-
-        # Perform the update
-        if iter < 20:
-            momentum = initial_momentum
-        else:
-            momentum = final_momentum
-        gains = (gains + 0.2) * ((dY > 0.) != (iY > 0.)) + \
-                (gains * 0.8) * ((dY > 0.) == (iY > 0.))
-        gains[gains < min_gain] = min_gain
-        iY = momentum * iY - eta * (gains * dY)
-        Y = Y + iY
-        Y = Y - np.tile(np.mean(Y, 0), (n, 1))
-
-        # Compute current value of cost function
-        if (iter + 1) % 10 == 0:
-            C = np.sum(P * np.log(P / Q))
-            print("Iteration %d: error is %f" % (iter + 1, C))
-
-        # Stop lying about P-values
-        if iter == 100:
-            P = P / 4.
-
-    # Return solution
-    return Y
+	print("Preprocessing the data using PCA...")
+	(n, d) = X.shape
+	#(l, M) = np.linalg.eig(np.dot(X.T, X))
+	return np.dot(X - np.tile(np.mean(X, 0), (n, 1)),
+				np.linalg.eig(np.dot(X.T, X))[1][:, 0:N0])
 
 
+def tsne0(X=np.array([]), N=2, N0=50, perplexity=30.0, pca=True):
+	"""
+		Runs t-SNE on the dataset in the NxD array X to reduce its
+		dimensionality to N dimensions. The syntaxis of the function is
+		`Y = tsne.tsne(X, N, perplexity), where X is an NxD NumPy array.
+	"""
 
+	# Check inputs
+	if isinstance(N, float):
+		print("Error: array X should have type float.")
+		return -1
+	if round(N) != N:
+		print("Error: number of dimensions should be an integer.")
+		return -1
+
+	# Initialize variables
+	(n, d) = X.shape
+	max_iter = 1000
+	initial_momentum = 0.5
+	final_momentum = 0.8
+	eta = 500
+	tol = 1e-5
+	min_gain = 0.01
+	eps = TOL_MIN
+	Y = np.random.randn(n, N)
+	dY = np.zeros((n, N))
+	iY = np.zeros((n, N))
+	gains = np.ones((n, N))
+
+	# Compute P-values
+	if pca:
+		P = x2p0(pca0(X, N0).real, tol, perplexity)
+	else:
+		P = x2p0(X,tol,perplexity)
+	P += np.transpose(P)
+	
+	P /= np.maximum(np.sum(P),TOL_MIN)
+	P *= 4.									# early exaggeration
+	P = np.maximum(P, TOL_MIN)
+	# Run iterations
+	for iter in range(max_iter):
+
+		# Compute pairwise affinities
+		sum_Y = np.sum(np.square(Y), 1)
+		num = -2. * np.dot(Y, Y.T)
+		num = 1. / (1. + np.add(np.add(num, sum_Y).T, sum_Y))
+		num[range(n), range(n)] = 0.
+		Q = num / np.maximum(np.sum(num),TOL_MIN) # maximum
+		# Q = np.maximum(Q,TOL_MIN)
+		# print('P',P)
+		# print('Q',Q)
+		# Compute gradient
+		PQ = P - Q
+		for i in range(n):
+			dY[i, :] = np.sum(np.tile(PQ[:, i] * num[:, i], (N, 1)).T * (Y[i, :] - Y), 0)
+
+		# Perform the update
+		if iter < 20:
+			momentum = initial_momentum
+		else:
+			momentum = final_momentum
+		gains = (gains + 0.2) * ((dY > 0.) != (iY > 0.)) + \
+				(gains * 0.8) * ((dY > 0.) == (iY > 0.))
+		gains[gains < min_gain] = min_gain
+		iY *= momentum 
+		iY -= eta * (gains * dY)
+		Y += iY
+		Y -= np.tile(np.mean(Y, 0), (n, 1))
+
+		# Compute current value of cost function
+		if (iter + 1) % 100 == 0:
+			C = np.sum(P * np.log((P+eps) / (Q+eps)))
+			print("Iteration %d: error is %f" % (iter + 1, C))
+
+		# Stop lying about P-values
+		if iter == 100:
+			P = P / 4.
+
+	# Return solution
+	return Y
+
+def run_rep(data,N=2,N0=None,perp=30.0,rep='tsne',pca=True):
+	#d = pairwise_distance(data_typed[t][k])
+	#x2p0(d,entropy_gaussian,tol,perp,n_iter)
+	#binary_search(d,np.ones(n),entropy_gaussian,perp*np.ones(n),tol,n_iter)
+
+	# Run Representation
+	if rep == 'pca':
+		return pca0(data)
+	elif rep == 'tsne':
+		return tsne0(data,N,N0,perp,pca)
 
 		
 def plot_props(keys,data_rep,data_type):
@@ -458,11 +502,13 @@ def plot_props(keys,data_rep,data_type):
 		  'data':  {'plot_type':'scatter',
 					'plot_range': np.reshape(data_typed[(
 							 'temperatures'+'_'+data_type)][k],(-1,)),
-					'data_process':lambda data: np.real(data)},
+					'data_process':lambda data: np.real(data),
+					'domain_process':lambda domain: np.real(domain)},
 					
 		  'other': {'cbar_plot':True, 'cbar_title':'Temperatures',
 				   'cbar_color':'jet','cbar_color_bad':'magenta',
 					'label': lambda x='':x,'pause':0.01,
+					'sup_legend': False,
 					'sup_title': {'t': data_rep + ' Representation - ' +
 									   data_type}
 					}
@@ -472,8 +518,7 @@ def plot_props(keys,data_rep,data_type):
 
 
 if __name__ == "__main__":
-	pass
-#    print("Run Y = tsne.tsne(X, no_dims, perplexity) to perform t-SNE on your dataset.")
+#    print("Run Y = tsne.tsne(X, N, perplexity) to perform t-SNE on your dataset.")
 #    print("Running example on 2,500 MNIST digits...")
 #    X = np.loadtxt("mnist2500_X.txt")
 #    labels = np.loadtxt("mnist2500_labels.txt")
@@ -500,19 +545,32 @@ if __name__ == "__main__":
 	data_types_config = ['spinConfigs_Ising','spinConfigs_gauge']
 	data_types_temps = ['temperatures_Ising','temperatures_gauge']
 	data_obj_format = {k: 'array' for k in data_types_config+data_types_temps}
-	data_reps = ['pca','tsne']
+	data_reps = ['tsne','pca']
 	
 	data_params =  {'data_files': data_files,
 		            'data_types':data_types_config+data_types_temps,
 					'data_format': 'npz', 
 					'data_obj_format': data_obj_format,
 					'data_dir': 'dataset/tsne/',
-					'one_hot': [False]}
+					'one_hot': [False],
+					'data_name_format':['','pca','perp','N0','']}
 	 
+	data_params.update(vars(args))
+	Data_Process().format(data_params,initials=False)
+	if data_params['file_dir'] == '':
+		data_params['file_dir'] = data_params['data_dir']
+	
+	
+	# Import Data
 	
 	data,data_sizes,_,_ = Data_Process().importer(data_params,
-							data_typing='dict',data_lists=True,upconvert=True)
-	display(True,True,'Data Imported... \n'+str(data_sizes)+'\n')
+							data_typing='dict',data_lists=True,upconvert=True,
+							directory=data_params['file_dir'])
+	
+	display(True,True,'Data Imported... \n'+str(data_sizes)+'\n'+ (
+												data_params['data_file']+'\n'))
+
+	# Setup Data
 	
 	# Change keys structure for appropriate plot labels (i.e. L_XX size labels)
 	ind_data = [-3,None]
@@ -529,6 +587,8 @@ if __name__ == "__main__":
 	Y = {r: dict_modify(data,data_types_config,
 				              f=lambda k,v: [],i=ind_data,j=ind_type)
 			for r in data_reps}
+	
+	Y2 = Y.copy()
 	
 	data_types_config = [t[slice(*ind_type)] for t in data_types_config]
 	data_types_temps  = [t[slice(*ind_type)] for t in data_types_temps]
@@ -547,42 +607,66 @@ if __name__ == "__main__":
 	
 	comp = lambda x,i: {k:v[:,i] for k,v in x.items() if np.any(v)}
 	
-	
-	print('keys',{t:d.keys() for t,d in data_typed.items()})
-	print('keys',plot_keys)
-	print('Y',Y)
-	
-	
-	
+
 	# tSNE and PCA Analysis
 
 	for t in sorted(data_types_config):
-		for k in data_keys[t]:       
-			n = np.shape(data_typed[t][k])[0]
-			N = data_sizes[t][k][1]
-			M = 2
-			tol = 1e-6
-			perp = np.log(20.0)
-			#print('Desired Perp: ',perp,n,data_typed[t][k])
-			n_iter=50
-			#d = pairwise_distance(data_typed[t][k])
-			#x2p0(d,entropy_gaussian,tol,perp,n_iter)
-			#binary_search(d,np.ones(n),entropy_gaussian,perp*np.ones(n),tol,n_iter)
-			Y['pca'][t][k] = pca0(data_typed[t][k])
-			Y['tsne'][t][k]   =  tsne0(data_typed[t][k],M,N,perp)
-#            
+		
+		for r in data_reps:
+			
+			if r == 'pca':
+				continue
+		
+			# Check if Data Exists
+			params = data_params.copy()
+			file_header = r+'_'+t
+			file_name = file_header + data_params['data_file']
+			params['data_files'] = file_name+ '.'+data_params['data_format']
+			data = Data_Proc.importer(params,data_obj_format='dict',
+										format='npz')
+			if data is not None:
+				print('Previous Data Found for',file_name)
+				Y[r][t] = data[0][file_name].item()
+				
+				if data_params['repeat'] and r == 'tsne':
+					print('Repeating tsne for',file_name)
+					for k in data_keys[t]:
+						print(r,t,k)
+						Y2[r][t][k] = run_rep(data = Y[r][t][k],
+											  N = data_params['N'],
+											  N0 = None, 
+											  perp = data_params['perp'], 
+											  rep = r, 
+											  pca = data_params['pca'])
+				
+				
+			else:
+				print('New Data for',file_name)
+				continue
+				for k in data_keys[t]:   
+					print(r,t,k)
+					Y[r][t][k] = run_rep(data = data_typed[t][k],
+										 N = data_params['N'],
+										 N0 = data_params['N0'], 
+										 perp = data_params['perp'], 
+										 rep = r, 
+										 pca = data_params['pca'])
+					
+				Data_Proc.exporter({file_header: Y[r][t]},data_params)
+				
+			
+			Data_Proc.plotter(comp(Y[r][t],1),comp(Y[r][t],0),
+					 plot_props(Y[r][t].keys(),r,t[-5:]),
+					 data_key=r+'_'+t)
+	Data_Proc.plot_save(data_params,read_write='a')
+				
+
 #            for r in data_reps:
 #                display(1,1,'%s for %s: %s...%s'%(r,t,k,
 #                                              str(np.shape(Y[r][t][k]))))
 #            
 #            
 #            
-		for r in data_reps:		
-			Data_Proc.plotter(comp(Y[r][t],1),comp(Y[r][t],0),
-                             plot_props(Y[r][t].keys(),r,t[-5:]),
-                             data_key=r+'_'+t)
-			Data_Proc.exporter({r+'_'+t: Y[r][t]},data_params)
-	Data_Proc.plot_save(data_params,read_write='a')
 #            
 #    
 #    

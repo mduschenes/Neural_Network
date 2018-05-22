@@ -1,0 +1,61 @@
+{ 'N0':[50,100,None]}
+{ 'perp': [10,20,30,40,50]}
+{ 'pca': [True,False]}
+
+
+def r(**kwargs):
+	return '8h'
+	# import numpy as np
+	# from Model import Model
+	
+	# kwargs = kwargs.copy()
+	
+	# if kwargs.get('T'):
+		# kwargs['T'] = Model(kwargs).T
+	
+	# # Ensure items are 1d
+	# for k,v in kwargs.items():
+		# if not isinstance(v,(str,dict,set,int,float)):
+			# kwargs[k] = np.max(v)
+		
+	# Nm0 = 1e3
+	# L0 = 8
+	# T0 = 0/np.log(1.0+np.sqrt(kwargs['q']))
+	# return '24h'
+	# if  (kwargs['Nm']<Nm0) and (kwargs['L']<L0) and (kwargs['T']>T0):r= '24h'
+	# elif(kwargs['Nm']<Nm0) and (kwargs['L']<L0) and (kwargs['T']<T0):r='24h'
+	# elif(kwargs['Nm']<Nm0) and (kwargs['L']>L0) and (kwargs['T']>T0):r='24h'
+	# elif(kwargs['Nm']<Nm0) and (kwargs['L']>L0) and (kwargs['T']<T0):r='24h'
+	
+	# elif(kwargs['Nm']>Nm0) and (kwargs['L']<L0) and (kwargs['T']>T0):r='20h'
+	# elif(kwargs['Nm']>Nm0) and (kwargs['L']<L0) and (kwargs['T']<T0):r='20h'
+	# elif(kwargs['Nm']>Nm0) and (kwargs['L']>L0) and (kwargs['T']>T0):r='24h'
+	# elif(kwargs['Nm']>Nm0) and (kwargs['L']>L0) and (kwargs['T']<T0):r='24h'
+	
+	# else: r= ''
+		
+	# return
+
+def memperproc_(**kwargs):
+	return '5G'
+
+def q(**kwargs):
+	return 'serial'
+
+def o(**kwargs):
+	
+	import numpy as np
+	
+	args = kwargs.copy()
+	
+	from data_functions import Data_Process
+	
+	props = {'data_name_format': ['','pca','perp','N0','']}
+	
+		
+	props.update(args)
+	Data_Process().format(props,initials=False)
+	file = 'output_file'
+	file += props['data_file']
+	
+	return (file+'.txt').replace(' ','')
