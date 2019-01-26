@@ -245,14 +245,17 @@ def array_dict(d):
 	else:
 		return [{}],1
 
-def dict_reorder(d,keys):
-	# Reorganize dictionary of dictionaries containing key in keys, into 
-	# dictionary 
-	keys = np.atleast_2d(keys)
-	if all([isinstance(v,dict) for v in d.values()]) and np.size(keys) > 1:
-		return {key:{k:dict_reorder(v,keys[1:])for k,v in d} for key in keys[0]}
+def dict_reorder(d,keys=None):
+	# Reorganize dictionary of dictionaries containing keys, into 
+	# dictionary of the fields of the dictionaryies associated with these keys.
+	print(d)
+	if all([isinstance(v,dict) for v in d.values()]):
+		if keys is None:
+			keys = list(set(flatten([list(k.keys()) for k in d.values()])))
+		keys = np.atleast_2d(keys)
+		return {key: {k: v.get(key) for k,v in d.items()} for key in keys[0]}
 	else:
-		return {key: {k: v[key] for k,v in d.items()} for key in keys[0]}
+		return d
 
 # Check if variable is dictionary
 def dict_check(dictionary,key):

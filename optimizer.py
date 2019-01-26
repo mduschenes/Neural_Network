@@ -141,7 +141,8 @@ class optimizer(object):
                                         for k,v in zip([x_,y_],data.values())})
                        
         # Initialize Lable, Accuracy and Cost Functions
-        if 1:
+        data_struct = 1
+        if data_struct:
           y_equiv = tf.cast(tf.equal(
                                                       tf.argmax(y_est,axis=1),
                                                       tf.argmax(y_,axis=1)), 
@@ -193,27 +194,28 @@ class optimizer(object):
        
         
         # Initialize Results Dictionaries
-        results_keys = {}
-        results_keys['train'] = ['train_acc','cost']
-        results_keys['test'] =  ['test_acc']
-        results_keys['other'] = ['y_equiv','y_est']
-        results_keys['all'] = (results_keys['train']+results_keys['test']+
-                            results_keys['other'])
-             
-        loc = vars()
-        loc = {key:loc.get(key) for key in results_keys['all'] 
-                               if loc.get(key) is not None}
-        results_keys['all'] = loc.keys()        
-        
-        
-        # Results Dictionary of Array for results values
-        results = {key: [] for key in results_keys['all']}
-                           
-        # Results Dictionary of Functions for results       
-        results_func = {}
-        for key in results_keys['all']:
-            results_func[key] = lambda feed_dict : sess_run(loc[key],feed_dict) 
-        
+        if data_struct:
+          results_keys = {}
+          results_keys['train'] = ['train_acc','cost']
+          results_keys['test'] =  ['test_acc']
+          results_keys['other'] = ['y_equiv','y_est']
+          results_keys['all'] = (results_keys['train']+results_keys['test']+
+                              results_keys['other'])
+               
+          loc = vars()
+          loc = {key:loc.get(key) for key in results_keys['all'] 
+                                 if loc.get(key) is not None}
+          results_keys['all'] = loc.keys()        
+          
+          
+          # Results Dictionary of Array for results values
+          results = {key: [] for key in results_keys['all']}
+                             
+          # Results Dictionary of Functions for results       
+          results_func = {}
+          for key in results_keys['all']:
+              results_func[key] = lambda feed_dict : sess_run(loc[key],feed_dict) 
+          
         
         display(True,True,'Results Initialized...')
            
@@ -449,15 +451,21 @@ class optimizer(object):
 if __name__ == '__main__':
     
 
-    # Data Set
-    data_files = ['x_train','y_train','x_test','y_test','T_other']
-    # data_sets = ['x_train','y_train','x_test','y_test','T_other']
-    data_format = 'npz'
-    one_hot = [True,'y_']
-    processing_keys = ['domain','data','data_type','plot_type','labels',
-                       'function']
+    # Dataset Parameters
+    data_params =  {'data_files': ['x_train','y_train','x_test','y_test',
+                                    'T_other'],
+                    # 'data_sets': data_sets,
+                    'data_types': ['train','test','other'],
+                    'data_wrapper': lambda v,i: array_sort(v,i,0,'ndarray'),
+                    'data_format': 'npz',
+                    'label_titles':['T>Tc','T<Tc'],
+                    'data_dir': 'dataset/',
+                    'one_hot': [True,'y_'],
+                    'upconvert': True,
+                    'data_lists': True
+                   }
 
-    processing = {'acc_train':{ 'domain':['other','T_other'],'data': [],
+    process_params = {'acc_train':{ 'domain':['other','epochs'],'data': [],
                                 'data_type': 'train',
                                 'plot_type': 'Training and Testing',
                                 'labels':[],
@@ -477,14 +485,14 @@ if __name__ == '__main__':
                                                       tf.float32))},
                   'y_equiv':  { 'domain':['other','T_other'],'data': [],
                                 'data_type': 'train',
-                                'plot_type': 'Training and Testing',
+                                'plot_type': 'Model Predictions',
                                 'labels':[],
                                 'function': lambda x_,y_,y_est: tf.equal(
                                                  tf.argmax(y_est,axis=1),
                                                  tf.argmax(y_,axis=1))},
                   'y_est':    { 'domain':['other','T_other'],'data': [],
                                 'data_type': 'train',
-                                'plot_type': 'Training and Testing',
+                                'plot_type': 'Model Predictions',
                                 'labels':['T>Tc','T<Tc'],
                                 'function': lambda x_,y_,y_est: y_est},
                   'y_grad':   { 'domain':['train','x_train'],'data': [],
@@ -495,21 +503,54 @@ if __name__ == '__main__':
                                                       tf.gradients(y_est,x_)}
                   }
 
-    results_keys = {}
-    results_keys['train'] = ['train_acc','cost']
-    results_keys['test'] =  ['test_acc']
-    results_keys['other'] = ['y_equiv','y_est']
-    results_keys['all'] = (results_keys['train']+results_keys['test']+
-                            results_keys['other'])
 
 
-    kwargs = {}
+    kwargs = {'train':True,'test':True,'other':True,
+              'plot':True,'save':True,'printit':True,'timeit':True}
+
+
+    # plot_params = {
+    #      k: {
+        
+    #       'ax':   {'title' : '',
+    #                 'xlabel': 'Epochs' if k 
+    #                            not in results_keys['other'] 
+    #                            else 
+    #                            caps(str(data_keys['other'][0]
+    #                                 ).replace('_other','')), 
+    #                 'ylabel': caps(k,True,split_char='_')
+    #                 },
+          
+    #       'plot':  {'marker':'*','color':np.random.rand(3)},
+          
+    #       'data':  {'plot_type':'plot'},
+                    
+    #       'other': {'label': lambda x='':x,
+    #                 'plot_legend':True if k == 'y_est' else False,
+    #                 'sup_legend': False,
+    #                 'sup_title': {'t': 'Optimization Parameters:'\
+    #                                '\n \n'+ 
+    #                                '\n'.join([str(caps(k,True,
+    #                                               split_char='_'))+
+    #                                 ':  '+line_break(str(
+    #                                   self.alg_params[k]),15,
+    #                                   line_space=' '*int(
+    #                                             2.5*len(str(k))))
+    #                                      for i,k in enumerate(
+    #                                      sorted(list(
+    #                                      self.alg_params.keys())))]),
+    #                               'x':0.925,'y':0.97,'ha':'left',
+    #                               'fontsize':7},
+    #                   'pause':0.01
+    #                 }
+    #      }
+    #     for k in process_params.keys()}
 
     # Neural Network Parameters    
     network_params = {
                   'n_neuron': [None,100,None], 
                   'alpha_learn': 0.0035, 'eta_reg': 0.0005,'sigma_var':0.1,                  
-                  'n_epochs': 50,'n_batch_train': 1/10,'n_epochs_meas': 1/50,
+                  'n_epochs': 5,'n_batch_train': 1/10,'n_epochs_meas': 1/50,
                   'cost_func': 'cross_entropy', 'optimize_func':'adam',
                   'regularize':'L2',
                   'method': 'neural_network',
@@ -545,27 +586,12 @@ if __name__ == '__main__':
                             },
                            
                   }
-    
-    # Dataset Parameters
-    data_params =  {'data_files': data_files,
-                    # 'data_sets': data_sets,
-                    'data_types': ['train','test','other'],
-                    'data_wrapper': lambda v,i: array_sort(v,i,0,'ndarray'),
-                    'data_format': data_format,
-                    'label_titles':['T>Tc','T<Tc'],
-                    'data_dir': 'dataset/',
-                    'one_hot': one_hot,
-                    'upconvert': True,
-                    'data_lists': True
-                   }
+  
     
     
     
     # Run Neural Network   
     nn = optimizer(network_params)
-    nn.training(data_params,kwargs,
-                train=True,test=True,other=True,
-                plot=False,save=True,
-                printit=True,timeit=True)
+    nn.training(data_params,**kwargs)
     
     
