@@ -38,10 +38,10 @@ parser.add_argument('-P','--perp',help = 'Perplexity',
 					type=float,default=30.0)#
 					
 parser.add_argument('-pca','--pca',help = 'Initially Perform PCA',
-					type=bool,default=True)#
+					action='store_true')
 
 parser.add_argument('-repeat','--repeat',help = 'Repeat tSNE',
-					type=bool,default=False)
+					action='store_true')
 					
 parser.add_argument('--data_dir',help = 'Data Directory',
 					type=str,default='dataset/tsne/')
@@ -449,7 +449,8 @@ def tsne0(X=np.array([]), N=2, N0=50, perplexity=30.0, pca=True):
 		# Compute gradient
 		PQ = P - Q
 		for i in range(n):
-			dY[i, :] = np.sum(np.tile(PQ[:, i] * num[:, i], (N, 1)).T * (Y[i, :] - Y), 0)
+			dY[i, :] = np.sum(np.tile(PQ[:, i] * num[:, i], (N, 1)).T *(
+																Y[i, :] - Y), 0)
 
 		# Perform the update
 		if iter < 20:
@@ -628,21 +629,12 @@ if __name__ == "__main__":
 				print('Previous Data Found for',file_name)
 				Y[r][t] = data[0][file_name].item()
 				
-				if data_params['repeat'] and r == 'tsne':
-					print('Repeating tsne for',file_name)
-					for k in data_keys[t]:
-						print(r,t,k)
-						Y2[r][t][k] = run_rep(data = Y[r][t][k],
-											  N = data_params['N'],
-											  N0 = None, 
-											  perp = data_params['perp'], 
-											  rep = r, 
-											  pca = data_params['pca'])
-				
+				Data_Proc.plotter(comp(Y[r][t],1),comp(Y[r][t],0),
+					 plot_props(Y[r][t].keys(),r,t[-5:]),
+					 data_key=r+'_'+t)
 				
 			else:
 				print('New Data for',file_name)
-				continue
 				for k in data_keys[t]:   
 					print(r,t,k)
 					Y[r][t][k] = run_rep(data = data_typed[t][k],
@@ -658,16 +650,4 @@ if __name__ == "__main__":
 			Data_Proc.plotter(comp(Y[r][t],1),comp(Y[r][t],0),
 					 plot_props(Y[r][t].keys(),r,t[-5:]),
 					 data_key=r+'_'+t)
-	Data_Proc.plot_save(data_params,read_write='a')
-				
-
-#            for r in data_reps:
-#                display(1,1,'%s for %s: %s...%s'%(r,t,k,
-#                                              str(np.shape(Y[r][t][k]))))
-#            
-#            
-#            
-#            
-#    
-#    
-#    
+	Data_Proc.plot_save(data_params,read_write='a')   

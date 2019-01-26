@@ -1,6 +1,6 @@
 { 'N0':[50,100,None]}
 { 'perp': [10,20,30,40,50]}
-{ 'pca': [True,False]}
+{ 'pca': ['"VERBOCITY_TRUE"','"VERBOCITY_FALSE"']}
 
 
 def r(**kwargs):
@@ -51,9 +51,11 @@ def o(**kwargs):
 	from data_functions import Data_Process
 	
 	props = {'data_name_format': ['','pca','perp','N0','']}
-	
 		
 	props.update(args)
+	
+	props['pca'] = True if props.get('pca') == '"VERBOCITY_TRUE"' else False
+	
 	Data_Process().format(props,initials=False)
 	file = 'output_file'
 	file += props['data_file']

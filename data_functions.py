@@ -4,12 +4,12 @@ Created on Sat Mar 24 19:54:38 2018
 @author: Matt
 """
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
 import os,glob,copy
 
-from misc_functions import (flatten,dict_check, one_hot,caps,
+from misc_functions import (flatten,dict_check, one_hot,caps,display,
 							list_sort,str_check,delim_check)
 import plot_functions
 
@@ -17,14 +17,16 @@ NP_FILE = 'npz'
 IMG_FILE = 'pdf'
 DIRECTORY = 'dataset/'
 DELIM = [' ','.']
-BACKEND = 'Qt4Agg'
+BACKEND = 'Agg'
+DISP = False
+ORIENTATION = False
 
 class Data_Process(object):
     
     # Create figure and axes dictionaries for dataset keys
 	def __init__(self,keys=[None],plot=[False],
 				 np_file = None,img_file=None,backend=None,
-				 directory=None,delim=None):
+				 directory=None,delim=None,disp=False,orientation=None):
 		 
 		# Standardized attributes
 		for f,F in [(v,V) for v,V in locals().items() 
@@ -43,25 +45,32 @@ class Data_Process(object):
 			
 			self.keys = keys
 			
-			if np.size(plot) == 1:
+			if np.size(plot) == 1 and not isinstance(plot,dict):
 				self.plot = {k: np.atleast_1d(plot)[0] for k in keys}
 			else:
 				self.plot = plot
 			
+			
 			self.data_key = 'data_key'
 			
 			# Create Figures and Axes with keys
-			self.figures_axes(keys)
+			self.figures_axes(keys,self.ORIENTATION)
 
 		return  
     
 
 
      # Plot Data by keyword
-	def plotter(self,data,domain=None,plot_props={},data_key=None,keys=None):
+	def plotter(self,data,domain=None,plot_props={},data_key=None,keys=None,
+				disp=None):
+		
 		if not self.plot.get(data_key,True):
 			return
 
+		# Display
+		if disp is None:
+			disp = self.DISP
+			
 		# Ensure Data, Domain and Keys are Dictionaries
 
 		self.plot[data_key] = True
@@ -90,13 +99,18 @@ class Data_Process(object):
 			if x is not None and np.size(x) == np.size(y):
 				return np.reshape(x,np.shape(y))
 			else:
-				return np.zeros(x,np.shape(y))
+				return x
 		
+		# print('data',data)
+		# print('\n')
+		# print('domain',domain)
+		# print('\n')
 		for k in keys:    
 			if not isinstance(domain,dict) and isinstance(data[k],dict):
-				dom[k]={ki: shape_data(x,data[k][ki]) for ki in data[k].keys()}
+				dom[k]={ki: shape_data(domain,data[k][ki]) 
+							for ki in data[k].keys()}
 			elif not isinstance(domain,dict):
-				dom[k] = shape_data(x,data[k])
+				dom[k] = shape_data(domain,data[k])
 			elif isinstance(data[k],dict):
 				if isinstance(domain[k],dict):
 					dom[k] = {ki: shape_data(domain[k][ki],data[k][ki])
@@ -109,14 +123,19 @@ class Data_Process(object):
 
 		domain = dom
 			
-		
+		# print('data',data)
+		# print('\n')
+		# print('domain',domain)
 
 		# Create Figures and Axes
 		self.figures_axes({data_key:keys})            
 
 		
 		# Plot for each data key
-		for key in keys:
+		for key in sorted(keys):
+		
+			display(print_it=disp,time_it=False,
+						m = 'Plotting %s'%(str_check(key)))
 			props = plot_props.get(key,plot_props)
 			# props['other']['backend'] = self.BACKEND
 			props['other']['plot_key'] = key
@@ -132,9 +151,9 @@ class Data_Process(object):
 				fig = self.figs[data_key][key]
 				plt.figure(fig.number)
 				fig.sca(ax)
-			# Plot Data
-			# try:
 			
+			# Plot Data
+			#try:
 			getattr(plot_functions,'plot_' + props.get('data',{}).get(
 					'plot_type','plot'))(data[key],domain[key],fig,ax,props)
 			# except AttributeError:
@@ -144,10 +163,13 @@ class Data_Process(object):
 				# display(m='Figure %s Created'%(
 										# plot_props[key]['data']['plot_type']))
 										
-										
+			
+			# Figure Title and Legend
 			plt.suptitle(**props.get('other',{}).get('sup_title',{}))
-			if props.get('other',{}).get('sup_legend'):
-				fig.legend(*(list_sort(ax.get_legend_handles_labels(),1)))
+			if props.get('other',{}).get('sup_legend') and (
+				len(ax.get_legend_handles_labels()) > 1):
+				fig.legend(*(list_sort(ax.get_legend_handles_labels(),1)),
+							**props.get('other',{}).get('legend',{}))
 
 		return
             
@@ -165,12 +187,13 @@ class Data_Process(object):
 	# Save all current figures
 	def plot_save(self,data_params={'data_dir':'dataset/',
 									'figure_format':None},
-					   fig_keys = None,directory=None,
-					   label = '',read_write='w',fig_size=(8.5,11)):
+					   fig_keys = None,directory=None,format=None,
+					   label = '',read_write='w',fig_size=None):#(8.5,11)):
         
         # Save Figures for current Data_Process Instance
-		
-		format = data_params.get('figure_format',self.IMG_FILE)
+		if format is None:
+			format = data_params.get('figure_format',self.IMG_FILE)
+			
 		# Data Directory
 		if directory is None:
 			directory = data_params.get('data_dir','dataset/')
@@ -183,7 +206,8 @@ class Data_Process(object):
 		if fig_keys is None:
 			fig_keys = self.figs.keys()
 		
-		for fig_k,fig_i in [(k,f) for k,f in self.figs.items()if k in fig_keys]:
+		for fig_k,fig_i in [(k,f) for k,f in self.figs.items()
+							if k in fig_keys and self.plot[k]]:
 			
 			for ifig in set([f.number for f in fig_i.values()]):
 			
@@ -197,9 +221,8 @@ class Data_Process(object):
 					fig.set_size_inches(fig_size)
 
 				# Set File Name and ensure no Overwriting
-				
-				if not label is [None,'']:
-					label = '_' + label
+				if not label in [None,'']:
+					label = '_' + str_check(label)
 				else:
 					label = ''
 				
@@ -209,7 +232,7 @@ class Data_Process(object):
 				else:
 					file = directory + fig_k + label
 			
-		
+			
 				i = 0
 				file_end = ''
 				while os.path.isfile(file + file_end + '.'+format):
@@ -218,10 +241,12 @@ class Data_Process(object):
 
 				# Save Figure as File_Format
 				if read_write == 'w': 
-					if i > 0: return 
+					if i > 0: pass 
 					else: file_end = ''
+				elif read_write == 'ow':
+					file_end = ''
 				plt.savefig(file + file_end+'.'+format,
-							bbox_inches='tight',dpi=500)
+							dpi=500,bbox_inches='tight')
 				fig.set_size_inches(plot_size) 
 			
 		return
@@ -230,7 +255,7 @@ class Data_Process(object):
     
     
 	 # Create figures and axes for each passed set of keys for datasets
-	def figures_axes(self,Keys):     
+	def figures_axes(self,Keys,orientation=False):     
 		
 		if not isinstance(Keys,dict):
 			Keys = {self.data_key: Keys}
@@ -248,11 +273,19 @@ class Data_Process(object):
 				self.axes[keys_label] = {}
 				self.figs[keys_label] = {}
 
-				fig, ax = plt.subplots(*(np.shape(keys)[:2]))
+				key_shape = np.shape(keys)[:2]
+				
+				if orientation and np.size(key_shape) == 1:
+					key_shape = (1,)+key_shape
+				elif orientation:
+					key_shape = (key_shape[1],key_shape[0])
+					
+				fig, ax = plt.subplots(*(key_shape))
 				
 				fig.canvas.set_window_title('Figure: %d  %s Datasets'%(
 												  fig.number,caps(keys_label)))
-				for k,a in zip(keys_new,flatten(np.atleast_1d(ax).tolist(),False)):
+				for k,a in zip(keys_new,flatten(np.atleast_1d(ax).tolist(),
+																		False)):
 					if k is not None:
 						a.axis('off')
 						self.axes[keys_label][k] = a
@@ -274,10 +307,16 @@ class Data_Process(object):
 					 'data_dir': 'dataset/',
 					 'data_lists': False,
 					 'one_hot': [False,'y_'],
-					},directory=None,format=None,data_typing=None,
-					data_obj_format=None,
+					 'upconvert':False
+					},directory=None,data_files = None,
+					format=None,data_typing=None,
+					data_obj_format=None,disp=None,
 					upconvert=False,delim=None,data_lists=False):
 
+		# Display
+		if disp is None:
+			disp = self.DISP
+			
 		# Bad delimeters
 		if delim is None:
 			delim = data_params.get('delim',self.DELIM)
@@ -286,14 +325,26 @@ class Data_Process(object):
 		# Check of importing batch of files
 		data_params = dict_check(data_params,'data_files')            
 
+		if data_files is None:
+			data_files = data_params.get('data_files','*.'+self.NP_FILE)
+		
 		if directory is None:
 			directory = data_params.get('data_dir',self.DIRECTORY)
 
+
+		if data_lists is None:
+			data_lists = data_params.get('data_lists',False)
+
+		if upconvert is None:
+			upconvert = data_params.get('upconvert',False)
+
+		if not os.path.isdir(directory):
+			os.makedirs(directory)
+			
 		# Import Data				
 		
 		def import_func(file,directory,format,key,type=None,**kwargs):		
-			formatter = lambda s,f: s.split('.')[0] + '.'+f.split('.')[-1]
-			
+			formatter = lambda s,f: s.split('.')[0] + '.'+f.split('.')[-1]			
 			if not os.path.getsize(directory + formatter(file,format)) > 0:
 				return None			
 			
@@ -326,22 +377,25 @@ class Data_Process(object):
 													).get(dtype,'array')
 			else:
 				data_obj = data_obj_format
-				
+			
 			if data is None:
 				return data
 			
 			elif 'np' in format.get(key,[]) and data_obj == 'dict':
-				return data.item().copy()
+				try:
+					return data.item()
+				except AttributeError:
+					return data
 			elif not isinstance(data,str):
-				return data.copy()		
+				return data		
 			else:
 				return data		
 		
 		# Import Data				
-		if isinstance(data_params['data_files'],(tuple,str)):
+		if isinstance(data_files,(tuple,str)):
 			files = []
 			format_files = {}
-			for f in np.atleast_1d(data_params['data_files']):
+			for f in np.atleast_1d(data_files):
 				if format is not None:
 					f = f.split('.')[0] + '.' + format.split('.')[-1]
 				if '*' in f:
@@ -353,7 +407,6 @@ class Data_Process(object):
 										 if os.path.isfile(os.path.join(
 													directory, x)) 
 										 and f in x ]
-				
 				files.extend(ftemp)
 			
 			
@@ -365,7 +418,7 @@ class Data_Process(object):
 				
 			files = dict_check(files,data_params.get('data_sets',files.copy()))
 		else: 
-			files = data_params['data_files'].copy()
+			files = data_files.copy()
 			files = dict_check(files,data_params.get('data_sets',files.copy()))
 			format_files = {k: data_params.get('data_format',self.NP_FILE)
 							for k in files.keys()}
@@ -382,10 +435,12 @@ class Data_Process(object):
 						for t in data_params['data_types']
 						for k in files.keys()}
 						
-		for k,v in files.items():
+		for i,(k,v) in enumerate(files.items()):
 			if v is not None:
-				data[k] = import_func(v,directory,format[k],data_types[k])
-		
+				display(print_it=disp,time_it=False,
+					m = 'Importing %d/%d %s'%(i+1,len(files),k))
+				data[k] = import_func(v,directory,format[k],k,
+											data_types[k])
 		if data == {}:
 			return None
 		
@@ -418,7 +473,6 @@ class Data_Process(object):
 		
 		
 		# Type of Data Sets and Data Set Keys
-		
 		if data_typing is None:
 			data_typing = data_params.get('data_typing','dict')
 		
@@ -426,25 +480,28 @@ class Data_Process(object):
 			data_typed = data.copy()
 			
 		else:
-			def data_typer(data,dtype):
+			def data_typer(data,dtype,data_typed):				
+				k_list = [k for k in data.keys() if (dtype in k) and (
+							 k not in dt.keys() for dt in data_typed.values())]
 				if data_typing == 'dict':
-					return {k: process(k,data[k],dtype) 
-							for k in data.keys() if dtype in k}
+					return {k: process(k,data[k],dtype) for k in k_list}
 			
 				elif data_typing == 'dict_split':
 					return {k.split(dtype)[0]: process(k,data[k],dtype) 
-							for k in data.keys() if dtype in k}
+							for k in k_list}
 				
 				else:
-					return [process(k,data[k],dtype) 
-                          for k in data.keys() if dtype in k]
+					return [process(k,data[k],dtype) for k in k_list]
 		
 			data_typed = {}
 			data_keys = {}
 			for t in data_params['data_types']:
-				
 				# Define Sets
-				data_typed[t] = data_typer(data,t)
+				data_typed[t] = data_typer(data,t,data_typed)
+				if data_typed[t] == {}: 
+					data_typed.pop(t);
+					continue
+				
 				data_keys[t] = list(data_typed[t].keys())
 				
 				# Check Delimeters
@@ -452,12 +509,12 @@ class Data_Process(object):
 				delim_check(data_keys[t],delim) 
 		
 		
-		
 		# If not NP_FILE format, Export as NP_FILE for easier importing
 		for k,f in format.items():
 			for t,v in data_keys.items():
 				if upconvert and f in ['npy','txt'] and k in v and (
-					   data_params.get('data_obj_format',{}).get(t) == 'array'):
+					   data_params.get('data_obj_format',{}).get(t,'dict') == 
+					   									'array'):
 					self.exporter({k:data[k]},data_params,format=self.NP_FILE)
 		
 		return data, data_sizes, data_typed, data_keys
@@ -468,16 +525,26 @@ class Data_Process(object):
 	# Export Data
 	def exporter(self,data,
 				 data_params={'data_dir':'dataset/','data_file':None},
-				 export=True, label = '', directory=None,
-				  format = None,read_write='w',delim=None):
+				 export=True, label = '', directory=None, file=None,
+				 disp=None,format = None,read_write='w',delim=None):
 	   
 	   
 		if not export:
 			return	
 	   
+	   # Display
+		if disp is None:
+			disp = self.DISP
+	   
 		# Bad delimimeters
 		if delim is None:
 			delim = data_params.get('delim',self.DELIM)
+	   
+		# Label
+		if not label in [None,'']:
+			label = '_' + str_check(label)
+		else:
+			label = ''
 	   
 	   # Check if Data is dict type
 		data = dict_check(data.copy(),'') 
@@ -491,12 +558,15 @@ class Data_Process(object):
 			os.makedirs(directory)
 			
 		# Data Names
-		if not data_params.get('data_file'):
-			file = lambda value: value
-		
-		elif not callable(data_params['data_file']):
-			g = data_params['data_file']
-			file  = lambda k: g + k
+		if file is None:
+			if not data_params.get('data_file'):
+				file = lambda value: label+value
+			else:
+				file = data_params.get('data_file')
+				
+		if not callable(file):
+			g = file
+			file  = lambda k: g + label + k
 		
 		# Data Format
 		
@@ -504,8 +574,16 @@ class Data_Process(object):
 			format_files = {}
 			for k in data.keys():
 				if format is None:
-					format_files[k] = data_params.get('data_format',
-													self.NP_FILE).split('.')[-1]
+					if isinstance(data_params.get('data_format',None),dict):
+						
+						dtype = [t for t in data_params['data_format'].keys() 
+									if k in t or t in k]
+						dtype = dtype[0] if dtype != [] else None
+						format_files[k] = data_params['data_format'].get(
+											 dtype,self.NP_FILE).split('.')[-1]
+					else:
+						format_files[k] = data_params.get('data_format',
+												  self.NP_FILE).split('.')[-1]
 				else:
 					format_files[k] = format.split('.')[-1]
 			format = format_files
@@ -518,63 +596,77 @@ class Data_Process(object):
 			i = 0
 			file_end = ''
 			file_k = file(k).split('.')[0].replace(' ','')
-			while os.path.isfile(directory+file_k+label+
+			while os.path.isfile(directory+file_k+
 								 file_end+ '.' +format[k]):
 				file_end = '_%d'%i
 				i+=1
 			
-			file_path = directory+file_k+label
+			file_path = directory+file_k
+			
+			display(print_it=disp,time_it=False,
+					m = 'Exporting %s'%(k))
 			
 			if not isinstance(v,np.ndarray):
 				if v == {} or v == []:
 					return
 				else:
 					v = np.asarray(v)
+						
 			
-			
-			
+						
 			if format[k] == 'npy':
-				if read_write == 'a' and i>0:
-					v0 = np.load(file_path+ '.' + 'npy')
-					file_end = ''
-					np.save(file_path+file_end+'.'+'npy',np.array([v0,v]))
-				elif read_write == 'ow':
-					read_write = 'w'
-					file_end = ''
-					np.save(file_path+file_end+'.'+'npy',v)
-				else: 
-					np.save(file_path+file_end+'.'+'npy',v)
-		
-			elif format[k] == 'npz':
-				if read_write == 'a' and i>0:
-					v0 = np.load(file_path+ '.' + 'npz')
-					file_end = ''
-					np.savez_compressed(file_path+file_end+'.'+'npz',
-										np.array([v0,v]))
-				elif read_write == 'ow':
-					read_write = 'w'
-					file_end = ''
-					np.savez_compressed(file_path+file_end+'.'+'npz',v)
-				else: 
-					np.savez_compressed(file_path+file_end+'.'+'npz',v)
-			
-			elif format[k] == 'txt':
-				if read_write == 'a':
-					file_end = ''
-				elif read_write == 'ow':
-					read_write = 'w'
-					file_end = ''
-				with open(file_path+file_end+'.'+'txt',read_write) as file_txt:
-					if isinstance(v,dict):
-						for key in sorted(
-							list(v.keys()),
-							key=lambda x: (len(x),len(str(v[x])),str.lower(x))):
-							
-							file_txt.write('%s:  %s \n \n \n'%(str(key),
-															   str(v[key])))
-					else:
-						file_txt.write(str(v))
-			
+				try:
+					if read_write == 'a' and i>0:
+						v0 = np.load(file_path+ '.' + 'npy')
+						file_end = ''
+						np.save(file_path+file_end+'.'+'npy',np.array([v0,v]))
+					elif read_write == 'ow':
+						read_write = 'w'
+						file_end = ''
+						np.save(file_path+file_end+'.'+'npy',v)
+					else: 
+						np.save(file_path+file_end+'.'+'npy',v)
+				except MemoryError:
+					v = np.array(v)
+					format[k] = 'npz'
+					
+			if format[k] == 'npz':
+				try:
+					if read_write == 'a' and i>0:
+						v0 = np.load(file_path+ '.' + 'npz')['arr_0']
+						file_end = ''
+						np.savez_compressed(file_path+file_end+'.'+'npz',
+											np.array([v0,v]))
+					elif read_write == 'ow':
+						read_write = 'w'
+						file_end = ''
+						np.savez_compressed(file_path+file_end+'.'+'npz',v)
+					else: 
+						np.savez_compressed(file_path+file_end+'.'+'npz',v)
+				except MemoryError:
+					print('Memory Error - File %s Not Saved'%file_path)
+					return
+			if format[k] == 'txt':
+				try:
+					if read_write == 'a':
+						file_end = ''
+					elif read_write == 'ow':
+						read_write = 'w'
+						file_end = ''
+					with open(file_path+file_end+'.'+'txt',read_write) as f:
+						if isinstance(v,dict):
+							for key in sorted(
+								list(v.keys()),
+								key=lambda x: (len(x),len(str(v[x])),
+																str.lower(x))):
+								
+								f.write('%s:  %s \n \n \n'%(str(key),
+																   str(v[key])))
+						else:
+							f.write(str(v))
+				except MemoryError:
+					print('Memory Error - File %s Not Saved'%file_path)	
+					return
 			
 		return
 	

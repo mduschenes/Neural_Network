@@ -11,7 +11,7 @@ import tensorflow as tf
 import numpy as np
 from misc_functions import display
 
-def neural_network(opt_params,alg_params):
+def neural_network(alg_params):
         
         def neuron_var(shape,name,sigma=0.1):
             initial = tf.truncated_normal(shape,stddev=sigma)
@@ -19,30 +19,31 @@ def neural_network(opt_params,alg_params):
         
         
         # Define Numbers In + Out + Hidden Layers
-        opt_params['n_layers'] = np.size(opt_params['n_neuron']) 
+        alg_params['n_layers'] = np.size(alg_params['n_neuron']) 
         
         # Define Type of Layers (fcc: Fully Connected, cnn: Convolutional)
-        if alg_params.get('layers') == 'fcc' or True:
-            alg_params['layers'] = ['fcc']*(opt_params['n_layers']-1)
+        # if alg_params.get('layers') == 'fcc' or True:
+        #     alg_params['layers'] = ['fcc']*(alg_params['n_layers']-1)
         
         # Initialize Weights, Biases and Input/Output Placeholders
-        x_ = tf.placeholder(tf.float32, [None,opt_params['n_neuron'][0] ])
-        y_ = tf.placeholder(tf.float32, [None,opt_params['n_neuron'][-1]])
+        x_ = tf.placeholder(tf.float32, [None,alg_params['n_neuron'][0] ])
+        y_ = tf.placeholder(tf.float32, [None,alg_params['n_neuron'][-1]])
         
-        W = [None]*(opt_params['n_layers']-1)
-        b = [None]*(opt_params['n_layers']-1)
-        T = [None]*(opt_params['n_layers'])
+        W = [None]*(alg_params['n_layers']-1)
+        b = [None]*(alg_params['n_layers']-1)
+        T = [None]*(alg_params['n_layers'])
         
         # Define Input
         T[0] = x_
         
         # Create Neuron Parameters in Layers
-        for i in range(opt_params['n_layers']-1):
+        for i in range(alg_params['n_layers']-1):
             
-            if alg_params['layers'][i] == 'fcc':
-                Wshape = [opt_params['n_neuron'][i],
-                          opt_params['n_neuron'][i+1]]
-                bshape = [opt_params['n_neuron'][i+1]]
+            if alg_params['layers'] == 'fcc' or (
+                alg_params['layers'][i] == 'fcc'):
+                Wshape = [alg_params['n_neuron'][i],
+                          alg_params['n_neuron'][i+1]]
+                bshape = [alg_params['n_neuron'][i+1]]
             
                 W[i] = neuron_var(Wshape,'weights_reg_%d'%i,
                                   alg_params['sigma_var'])
@@ -51,17 +52,17 @@ def neural_network(opt_params,alg_params):
                                   alg_params['sigma_var'])
             
                 # Calculate Activation function for ith layer and Output
-                if i != opt_params['n_layers']:
-                    T[i+1] = opt_params['neuron_func']['layer'](
+                if i != alg_params['n_layers']:
+                    T[i+1] = alg_params['neuron_func']['layer'](
                                                   tf.matmul(T[i],W[i]) + b[i])
                 else:
-                    T[i+1] = opt_params['neuron_func']['output'](
+                    T[i+1] = alg_params['neuron_func']['output'](
                                                   tf.matmul(T[i],W[i]) + b[i])
 
         # Define Ouput
         y_est = T[-1]
         
-        return y_est,x_,y_
+        return y_est,x_,y_,T,W,b
 
 def pca(X,n_dims=None):    
     
@@ -153,7 +154,7 @@ def tsne():
 
 
 
-    def tsne(X=np.array([]),opt_params={}, no_dims=2, initial_dims=50, perplexity=30.0):
+    def tsne(X=np.array([]),alg_params={}, no_dims=2, initial_dims=50, perplexity=30.0):
         """
             Runs t-SNE on the dataset in the NxD array X to reduce its
             dimensionality to no_dims dimensions. The syntaxis of the function is
@@ -182,7 +183,7 @@ def tsne():
         gains = np.ones((n, no_dims))
     
         # Compute P-values
-        P = x2p(X, 1e-5, opt_params['perplexity'])
+        P = x2p(X, 1e-5, alg_params['perplexity'])
         P = P + np.transpose(P)
         P = P / np.sum(P)
         P = P * 4.									# early exaggeration
