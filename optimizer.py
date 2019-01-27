@@ -322,13 +322,9 @@ class optimizer(object):
 
                     # Save and Plot Data
                     if plot_loop:
-                      for t in plot_keys.keys():
-                        Data_Proc.plotter(
-                              data=dict_reorder(process_params,'data',True),
+                      Data_Proc.plotter(data=dict_reorder(process_params,'data',True),
                               domain=dict_reorder(process_params,'domain',True),
-                              plot_props=plot_params,
-                              data_key=t)
-        
+                              plot_props=plot_params)        
      
                 
                     
@@ -338,11 +334,9 @@ class optimizer(object):
         plot_label = '%d epochs'%self.alg_params['n_epochs']
         if not plot_loop:
           Data_Proc.plot_set(plot=True,keys=plot_keys)
-          for t in plot_keys.keys():
-            Data_Proc.plotter(data=dict_reorder(process_params,'data',True),
+          Data_Proc.plotter(data=dict_reorder(process_params,'data',True),
                               domain=dict_reorder(process_params,'domain',True),
-                              plot_props=plot_params,
-                              data_key=t)
+                              plot_props=plot_params)
                             
         Data_Proc.plot_save(data_params,label=plot_label)
 
@@ -434,7 +428,7 @@ if __name__ == '__main__':
                                 'data_type': 'test',
                                 'domain_type': ['other','T_other'],
                                 'plot_type': 'Model Predictions',
-                                'labels':['T>Tc','T<Tc'],
+                                'labels':['T<Tc','T>Tc'],
                                 'data_wrapper': lambda v,i: array_sort(v,i,0,
                                                             'ndarray'),
                                 'function': lambda x_,y_,y_est: y_est},
@@ -464,7 +458,7 @@ if __name__ == '__main__':
     network_params = {
                   'n_neuron': [None,100,None], 
                   'alpha_learn': 0.0035, 'eta_reg': 0.0005,'sigma_var':0.1,                  
-                  'n_epochs': 100,'n_batch_train': 1/10,'n_epochs_meas': 1/50,
+                  'n_epochs': 5,'n_batch_train': 1/10,'n_epochs_meas': 1/50,
                   'cost_func': 'cross_entropy', 'optimize_func':'adam',
                   'regularize':'L2',
                   'method': 'neural_network',
