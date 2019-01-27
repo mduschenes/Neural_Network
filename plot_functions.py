@@ -72,8 +72,8 @@ def plot_decorator(plot_func):
 
 				plot[k] = plotter(x,y,plot_func,fig,ax,props)		
 		
-		# Set Plot Properties
-		set_props(plot[k],fig,ax,plot_props)
+			# Set Plot Properties
+			set_props(plot[k],fig,ax,plot_props)
         
 		return     
         
@@ -288,6 +288,7 @@ def get_props(data,domain,key,plot_props):
 	
 	x = np.squeeze(plot_props.get('data',{}).get('domain_process',
 								lambda x:np.real(x))(domain))
+
 	return y,x, plot_props.get('plot',{})
 	
 #def cursor_annotate(plot,leg,fig,ax):

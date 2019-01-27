@@ -8,7 +8,7 @@ Created on Sat Mar 24 15:54:40 2018
 
 
 import numpy as np
-import time,argparse,re
+import time,argparse,re,copy
 
 ##### Model Functions ########
 
@@ -245,17 +245,62 @@ def array_dict(d):
 	else:
 		return [{}],1
 
-def dict_reorder(d,keys=None):
+def dict_reorder(d,keys=None,return_inner=False):
 	# Reorganize dictionary of dictionaries containing keys, into 
 	# dictionary of the fields of the dictionaryies associated with these keys.
-	print(d)
 	if all([isinstance(v,dict) for v in d.values()]):
 		if keys is None:
 			keys = list(set(flatten([list(k.keys()) for k in d.values()])))
-		keys = np.atleast_2d(keys)
-		return {key: {k: v.get(key) for k,v in d.items()} for key in keys[0]}
+		keys = np.atleast_1d(keys)
+		if return_inner and (len(keys) == 1):
+			return {k: v.get(keys[0]) for k,v in d.items()}
+		else:
+			return {key: {k: v.get(key) for k,v in d.items()} for key in keys}
 	else:
+		if keys is None:
+			keys = list(set([k for k in d.values()]))
+		keys = np.atleast_1d(keys)
+		if return_inner and len(keys) == 1:
+			return [k for k,v in d.items() if v == keys[0]]
+		else:
+			return {key: [k for k,v in d.items() if v == key] for key in keys}	
 		return d
+
+
+def dict_feed(d1,d2,keys=None,return_inner=False,direct_access_d2=False):
+	# Reorganize dictionary of dictionaries containing keys, into 
+	# dictionary of the fields of the dictionaryies associated with these keys.
+	# These dictionaries values are fed as input to d2.
+	d1 = copy.deepcopy(d1)
+	d2 = copy.deepcopy(d2)
+	if all([isinstance(v,dict) for v in d1.values()]):
+		if keys is None:
+			keys = list(set(flatten([list(k.keys()) for k in d1.values()])))
+		keys = np.atleast_1d(keys)
+
+		if (not isinstance(d2,dict)) or (not direct_access_d2):
+			d2 = {k: d2 for k in keys}
+
+		key = keys[0]
+		v = list(d1.values())[0]
+
+		if return_inner and len(keys) == 1:
+			return {k: index_nested(d2[keys[0]],v[keys[0]]) 
+							for k,v in d1.items()}
+		else:
+			return {key: {k: index_nested(d2[key],v[key]) 
+							for k,v in d1.items()} for key in keys}
+	else:
+		if keys is None:
+			keys = list(set([k for k in d.values()]))
+		keys = np.atleast_1d(keys)
+		if return_inner and len(keys) == 1:
+			return [index_nested(d2[k],v) 
+							for k,v in d1.items() if k == keys[0]]
+		else:
+			return {key: [index_nested(d2[k],v) 
+							for k,v in d1.items() if k == key] for key in keys}	
+		return d1
 
 # Check if variable is dictionary
 def dict_check(dictionary,key):

@@ -45,11 +45,7 @@ class Data_Process(object):
 			
 			self.keys = keys
 			
-			if np.size(plot) == 1 and not isinstance(plot,dict):
-				self.plot = {k: np.atleast_1d(plot)[0] for k in keys}
-			else:
-				self.plot = plot
-			
+			self.plot_set(plot)
 			
 			self.data_key = 'data_key'
 			
@@ -72,9 +68,6 @@ class Data_Process(object):
 			disp = self.DISP
 			
 		# Ensure Data, Domain and Keys are Dictionaries
-
-		self.plot[data_key] = True
-
 				
 		plot_key = ''
 		if not isinstance(data,dict):
@@ -83,7 +76,7 @@ class Data_Process(object):
 		if data_key is None:
 			data_key = self.data_key
 
-
+		self.plot[data_key] = True
 
 		if keys is None:
 			keys = [k for k in data.keys() if k in self.axes.get(data_key,
@@ -100,11 +93,7 @@ class Data_Process(object):
 				return np.reshape(x,np.shape(y))
 			else:
 				return x
-		
-		# print('data',data)
-		# print('\n')
-		# print('domain',domain)
-		# print('\n')
+
 		for k in keys:    
 			if not isinstance(domain,dict) and isinstance(data[k],dict):
 				dom[k]={ki: shape_data(domain,data[k][ki]) 
@@ -122,10 +111,6 @@ class Data_Process(object):
 				dom = domain
 
 		domain = dom
-			
-		# print('data',data)
-		# print('\n')
-		# print('domain',domain)
 
 		# Create Figures and Axes
 		self.figures_axes({data_key:keys})            
@@ -139,18 +124,20 @@ class Data_Process(object):
 			props = plot_props.get(key,plot_props)
 			# props['other']['backend'] = self.BACKEND
 			props['other']['plot_key'] = key
-			try:
-				ax = self.axes[data_key][key]
-				fig = self.figs[data_key][key]
-				plt.figure(fig.number)
-				fig.sca(ax)
-			except:
-				self.figures_axes({data_key:keys})
+			# try:
+			ax = self.axes[data_key][key]
+			fig = self.figs[data_key][key]
+			plt.figure(fig.number)
+			fig.sca(ax)
+			ax.cla()
+		# except:
+			# 	self.figures_axes({data_key:keys})
 				
-				ax = self.axes[data_key][key]
-				fig = self.figs[data_key][key]
-				plt.figure(fig.number)
-				fig.sca(ax)
+			# 	ax = self.axes[data_key][key]
+			# 	fig = self.figs[data_key][key]
+			# 	plt.figure(fig.number)
+			# 	fig.sca(ax)
+			# 	ax.cla()
 			
 			# Plot Data
 			#try:
@@ -174,7 +161,17 @@ class Data_Process(object):
 		return
             
 
-
+	# Set to Plot
+	def plot_set(self,plot,keys=None,update=True):
+		if keys is None:
+			keys = self.keys
+		if np.size(plot) == 1 and not isinstance(plot,dict) and update:
+			self.plot = {k: np.atleast_1d(plot)[0] for k in keys}
+		elif (not isinstance(plot,dict)) and update:
+			self.plot = {k: plot for k in keys}
+		else:
+			self.plot = plot
+		return
 
 	# Clost all current figures and reset figures and axes dictionaries
 	def plot_close(self):
@@ -256,7 +253,6 @@ class Data_Process(object):
     
 	 # Create figures and axes for each passed set of keys for datasets
 	def figures_axes(self,Keys,orientation=False):     
-		
 		if not isinstance(Keys,dict):
 			Keys = {self.data_key: Keys}
 			   

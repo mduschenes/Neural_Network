@@ -7,11 +7,13 @@
 **/OLD*/
 **/*dataset*/
 
-
 **/__pycache__
 
 
 **/pycall*
+
+# Old Optimize Function
+optimizer_old.py
 
 # Windows image file caches
 Thumbs.db

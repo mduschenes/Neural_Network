@@ -7,12 +7,13 @@ Machine Learning and Many Body Physics
 PSI 2018 - Perimeter Institute
 """
 import sys
-sys.path.insert(0, "C:/Users/Matt/Google Drive/PSI/"+
+sys.path.insert(0, "$[HOME]/google-drive-um/PSI/"+
                    "PSI Essay/PSI Essay Python Code/tSNE_Potts/")
 
 import optimizer_methods
 from data_functions import Data_Process 
-from misc_functions import display,array_sort,caps,line_break
+from misc_functions import (display,array_sort,caps,line_break,
+                              dict_reorder,index_nested,dict_feed)
 
 import numpy as np
 import tensorflow as tf
@@ -32,23 +33,23 @@ class optimizer(object):
                      'neuron_func':{ 'layer':  tf.nn.sigmoid,
                                      'output': tf.nn.sigmoid
                                   },
-                     'cost_func': {
-                          'cross_entropy': lambda y_label,y_est,eps= 10**(-8): 
+                     'cost_functions': {
+                         'cross_entropy': lambda x_,y_,y_est,eps= 10**(-8): 
                                          -tf.reduce_sum(
-                                         y_label*tf.log(y_est+eps) +
-                                         (1.0-y_label)*tf.log(1.0-y_est +eps),
+                                         y_*tf.log(y_est+eps) +
+                                         (1.0-y_)*tf.log(1.0-y_est +eps),
                                          axis=1),
                                                  
-                          'mse': lambda y_label,y_est: (1/2)*(
-                                        tf.reduce_sum(tf.square(y_est-y_label),
+                          'mse': lambda x_,y_,y_est: (1/2)*(
+                                        tf.reduce_sum(tf.square(y_est-y_),
                                         axis=1)),
                           
-                          'entropy_logits': lambda y_label,y_est: 
+                          'entropy_logits': lambda x_,y_,y_est: 
                                   tf.nn.sigmoid_cross_entropy_with_logits(
-                                                 labels=y_label, logits=y_est),
+                                                 labels=y_, logits=y_est),
                           'L2': lambda var,eta_reg: tf.add_n([ tf.nn.l2_loss(v) 
-                                             for v in var]) * eta_reg
-                                },
+                                         for v in var]) * eta_reg
+                            },
                                       
                     'optimize_func': {'grad': lambda a,c: 
                                             tf.train.GradientDescentOptimizer(
@@ -84,7 +85,7 @@ class optimizer(object):
                      save = True, plot = False):
     
         # Initialize Network Data and Parameters
-        
+        data_struct = 0
         display(True,True,'Neural Network Starting...')
 
         # Import Data
@@ -114,10 +115,12 @@ class optimizer(object):
         self.alg_params['n_dataset_test'] = data_size.get('x_test',[None])[0]
         
         # Define Training Parameters
-        self.alg_params['n_batch_train'] = max(1,int(self.alg_params['n_batch_train']*
-                                                self.alg_params['n_dataset_train']))
-        self.alg_params['n_epochs_meas'] = max(1,int(self.alg_params['n_epochs']*
-                                                self.alg_params['n_epochs_meas']))
+        self.alg_params['n_batch_train'] = max(1,
+                                          int(self.alg_params['n_batch_train']*
+                                            self.alg_params['n_dataset_train']))
+        self.alg_params['n_epochs_meas'] = max(1,
+                                          int(self.alg_params['n_epochs']*
+                                             self.alg_params['n_epochs_meas']))
         
     
     
@@ -139,41 +142,27 @@ class optimizer(object):
         # Session Run Function
         sess_run = lambda var,data: sess.run(var,feed_dict={k:v 
                                         for k,v in zip([x_,y_],data.values())})
-                       
-        # Initialize Lable, Accuracy and Cost Functions
-        data_struct = 1
-        if data_struct:
-          y_equiv = tf.cast(tf.equal(
-                                                      tf.argmax(y_est,axis=1),
-                                                      tf.argmax(y_,axis=1)), 
-                                                      tf.float32)
-          train_acc =  tf.reduce_mean(tf.cast(tf.equal(
-                                                      tf.argmax(y_est,axis=1),
-                                                      tf.argmax(y_,axis=1)), 
-                                                      tf.float32))
-          test_acc =  tf.reduce_mean(tf.cast(tf.equal(
-                                                      tf.argmax(y_est,axis=1),
-                                                      tf.argmax(y_,axis=1)), 
-                                                      tf.float32))
-
-        
-
-
-        
-       
-
-
+                  
 
         
         # Define Cost Function (with possible Regularization)
-        cost = tf.reduce_mean(self.alg_params['cost_functions'][
-                                            self.alg_params['cost_func']](y_,y_est))
+        cost0 = lambda x_,y_,y_est: tf.reduce_mean(
+                                    self.alg_params['cost_functions'][
+                                     self.alg_params['cost_func']](x_,y_,y_est))
         
         if self.alg_params['regularize']:
-            cost += self.alg_params['cost_functions'][
-                 self.alg_params['regularize']](W,self.alg_params['eta_reg'])
-                                          #v for v in tf.trainable_variables() 
+            cost_reg = lambda x_,y_,y_est: (
+                                        self.alg_params['cost_functions'][
+                                        self.alg_params['regularize']](
+                                          var=W,
+                                          eta_reg=self.alg_params['eta_reg']))
+                                        #v for v in tf.trainable_variables() 
                                                        # if 'reg' in v.name],
+        else:
+            cost_reg = lambda x_,y_,y_est: 0
+        
+        cost = lambda x_,y_,y_est: cost0(x_,y_,y_est) + cost_reg(x_,y_,y_est)
+                                          
                                            
         
         # Define Learning Rate Corrections
@@ -187,71 +176,45 @@ class optimizer(object):
         # Training Output with Learning Rate Alpha and regularization Eta
         train_step = self.alg_params['optimize_functions'][
                                  self.alg_params['optimize_func']](
-                                                      cost=cost,
+                                                      cost=cost(x_,y_,y_est),
                                                       alpha_learn=alpha_learn)
+        if 'cost' in process_params.keys():
+          process_params['cost']['function'] = cost
+        else:
+          process_params['cost'] = { 
+                                'domain':['other','epochs'],'data': [],
+                                'data_name': 'Cost',
+                                'domain_name': 'Epochs',
+                                'data_type': 'train',
+                                'plot_type': 'Training and Testing',
+                                'labels':[],
+                                'function': cost}
 
-         
-       
-        
-        # Initialize Results Dictionaries
-        if data_struct:
-          results_keys = {}
-          results_keys['train'] = ['train_acc','cost']
-          results_keys['test'] =  ['test_acc']
-          results_keys['other'] = ['y_equiv','y_est']
-          results_keys['all'] = (results_keys['train']+results_keys['test']+
-                              results_keys['other'])
-               
-          loc = vars()
-          loc = {key:loc.get(key) for key in results_keys['all'] 
-                                 if loc.get(key) is not None}
-          results_keys['all'] = loc.keys()        
-          
-          
-          # Results Dictionary of Array for results values
-          results = {key: [] for key in results_keys['all']}
-                             
-          # Results Dictionary of Functions for results       
-          results_func = {}
-          for key in results_keys['all']:
-              results_func[key] = lambda feed_dict : sess_run(loc[key],feed_dict) 
-          
         
         display(True,True,'Results Initialized...')
            
         
         
         
-        
         # Initialize Plotting
-        plot_keys = {}
-        if test and train:
-          plot_keys['Testing and Training'] = (results_keys['train']+ 
-                                              results_keys['test'])
-        elif test and not train:
-          plot_keys['Testing'] = results_keys['test']
-        elif not test and train:
-          plot_keys['Testing'] = results_keys['test']
-
-        if other:
-          plot_keys['Other'] = results_keys['other']
-        
+        plot_keys = dict_reorder(dict_reorder(process_params,'plot_type',True))
+        plot_loop = plot.pop('plot_loop',True)
         Data_Proc = Data_Process(plot=plot, keys = plot_keys)
-        
+
         if plot_params == {}:
-            plot_params = {
+          plot_params = {
                      k: {
                     
                       'ax':   {'title' : '',
-                                'xlabel': 'Epochs' if k 
-                                           not in results_keys['other'] 
-                                           else 
-                                           caps(str(data_keys['other'][0]
-                                                ).replace('_other','')), 
-                                'ylabel': caps(k,True,split_char='_')
+                                'xlabel': caps(process_params[k]['domain_name'],
+                                                True,split_char='_'), 
+                                'ylabel': caps(process_params[k]['data_name'],
+                                                True,split_char='_'), 
                                 },
                       
-                      'plot':  {'marker':'*','color':np.random.rand(3)},
+                      'plot':  {'marker':'*' ,
+                                'color':np.random.rand(3) if 
+                                                k != 'y_est' else None},
                       
                       'data':  {'plot_type':'plot'},
                                 
@@ -266,15 +229,15 @@ class optimizer(object):
                                                   self.alg_params[k]),15,
                                                   line_space=' '*int(
                                                             2.5*len(str(k))))
-                                                     for i,k in enumerate(
-                                                     sorted(list(
-                                                     self.alg_params.keys())))]),
+                                                    for i,k in enumerate(
+                                                    sorted(list(
+                                                    self.alg_params.keys())))]),
                                               'x':0.925,'y':0.97,'ha':'left',
                                               'fontsize':7},
                                   'pause':0.01
                                 }
                      }
-                    for k in results_keys['all']}
+                    for k in process_params.keys()}
 
         
         
@@ -284,37 +247,22 @@ class optimizer(object):
         sess.run(tf.global_variables_initializer())
         
         display(True,True,'Training...')
-        
+
 
 
         # Train Model
         if train:
 
             epoch_range = range(self.alg_params['n_epochs'])
-
-            # data_typed['other']['epochs'] = epoch_range
-
-
             dataset_range = np.arange(self.alg_params['n_dataset_train'])
             batch_range = range(0,self.alg_params['n_dataset_train'],
                                     self.alg_params['n_batch_train'])
 
-            def domain(i = self.alg_params['n_epochs'],
-                       f = lambda i,*k: list(range(*i))):
-                
-                if not hasattr(i,'__iter__'):
-                    i = (0,i,self.alg_params['n_epochs_meas'])
-                
-                if callable(f):
-                    return {k: f(i,k) 
-                            for k in results_keys['all'] }
-                else:
-                    return {k: f for k in results_keys['all']}
             
-                        
             # Train Model over n_epochs with Gradient Descent 
             for epoch in epoch_range:
-                           
+
+
                 # Divide training data into batches for training 
                 # with Stochastic Gradient Descent
                 np.random.shuffle(dataset_range)                       
@@ -328,106 +276,75 @@ class optimizer(object):
             
                 # Record Results every n_epochs_meas
                 if (epoch+1) % self.alg_params['n_epochs_meas'] == 0:
-                    
-                    # Record Results: Cost and Training Accuracy
-                    for key,val in results.items():
-                        if train and key in results_keys['train']:
-                            val.append(results_func[key](data_typed['train'])) 
-                        
-                        elif test and key in results_keys['test']:
-                            val.append(results_func[key](data_typed['test']))
-                        
-                        elif other and key in results_keys['other']:
-                            val.append(results_func[key](data_typed['test']))
-                                                
+
+                    display(printit,False,'\nEpoch: %d'% epoch)
+
+                    data_typed['other']['epochs'] = epoch+1
+              
+                    for key,process in process_params.items():
+                        if vars().get(process['data_type']):
+                          # print('key val shape',key,np.shape(sess_run(process['function'](x_,y_,y_est),
+                          #     index_nested(data_typed,process['data_type']))))
+                          y,x = process.get('data_wrapper',
+                              lambda y,x:(y,x))(
+                              sess_run(process['function'](x_,y_,y_est),
+                              index_nested(data_typed,process['data_type'])),
+                              index_nested(data_typed,process['domain_type']))
+                          x = np.reshape(x,(-1))
 
 
-                     # Display Results
-                    display(printit,timeit,'\nEpoch: %d'% epoch + 
-                          '\n'+
-                          'Training Accuracy: '+str(results['train_acc'][-1])+
-                          '\n'+
-                          'Testing Accuracy: '+str(results['test_acc'][-1])+
-                          '\n'+
-                          'Cost:             '+str(results['cost'][-1])+
-                          '\n')
+                          if np.ndim(y) > 2:
+                              y = {
+                                    t: np.reshape(np.mean(np.take(y,j,-1),
+                                                                  -1),(-1))
+                                    for j,t in enumerate(process.get('labels',
+                                                    [process['data_name']]))}
+                              x = {t: x for t in process.get('labels',
+                                                    [process['data_name']])}
+                          elif np.ndim(y) == 2:
+                            y = np.reshape(np.mean(y,-1),(-1))
 
-            
+                          
+                          if (np.size(x) > 1 or np.size(y) > 1) or (
+                            isinstance(x,dict) and isinstance(y,dict)):
+                            process['data'] = y
+                            process['domain'] = x
+                          else:  
+                            process['data'].append(y)
+                            process['domain'].append(x)
+
+                          if process['plot_type'] in ['Training and Testing']:
+                            display(printit,False,'%s: %s'%(
+                                                  process['data_name'],str(y)))
+
+                    display(printit,True,'Time: ')
+
+
                     # Save and Plot Data
-                    #list(range(*i))) #domain(epoch+1),
-                    Data_Proc.plotter(results,list(range(0,epoch+1,
-											      self.alg_params['n_epochs_meas'])),
-                            plot_props=plot_params,
-                            data_key='Testing and Training')
-            
-            
-
-    
-        # Make Results Class variable for later testing with final network
-        data_params['results'] = results
-        data_params['results_func'] = results_func
-
-        self.data_params = data_params
+                    if plot_loop:
+                      for t in plot_keys.keys():
+                        Data_Proc.plotter(
+                              data=dict_reorder(process_params,'data',True),
+                              domain=dict_reorder(process_params,'domain',True),
+                              plot_props=plot_params,
+                              data_key=t)
         
-       
-        # Process Other Data with final trained values
-        if other: 
-            # Sort and Average over each array from other results
-            results_sort_avg = [{k:{} for k in results_keys['other']}
-                                  for i in range(len(data_typed['other']))]
-            domain_sort_avg = [{k:[] for k in results_keys['other']}
-                                  for i in range(len(data_typed['other']))]
-                        
-            for i,(k_other,d_other) in enumerate(data_typed['other'].items()):
-
-                for k in results_keys['other']:
-                    results_sort,d_sort = data_params.get('data_wrapper',lambda x,y: x)(results[k][-1],d_other)
-                    if np.ndim(results_sort) > 2 and (
-                      np.shape(results_sort)[-1] == 
-                      np.size(data_params.get('label_titles',[]))):
-
-                        results_sort_avg[i][k] = {
-                            t: np.reshape(np.mean(np.take(results_sort,j,-1),-1),(-1))
-                            for j,t in enumerate(data_params['label_titles'])}
-
-                        domain_sort_avg[i][k] = {t: d_sort for t in 
-                                                  data_params['label_titles']}
-
-                        results[k] = results_sort_avg[i][k]
-
-                        
-                    else:
-                        results[k] = np.reshape(np.mean(
-                                                        results_sort,-1),(-1))
-                        domain_sort_avg[i][k] = d_sort
-                if plot:
-                  Data_Proc.plotter(results,
-                                   domain_sort_avg[i],plot_params, 'Other')
-                
+     
                 
                     
         
         # Plot and Save Final Results
         display(True,False,'Saving Data...')
         plot_label = '%d epochs'%self.alg_params['n_epochs']
-        if not plot:
-            Data_Proc_Final = Data_Process(plot=True,
-                                           keys = {'Testing and Training':
-                                                         results_keys['train']+
-                                                         results_keys['test'],
-                                         'Other': results_keys['other']})
-            Data_Proc_Final.plotter(results,list(range(0,epoch+1,
-									self.alg_params['n_epochs_meas'])),
-									plot_params, 'Testing and Training')
-            if other:
-                for i in range(len(data_typed['other'])):
-                  Data_Proc_Final.plotter(results,
-                                   domain_sort_avg[i],plot_params, 'Other')
-            
-            Data_Proc_Final.plot_save(data_params,label=plot_label)
-        
-        else:
-            Data_Proc.plot_save(data_params,label=plot_label)
+        if not plot_loop:
+          Data_Proc.plot_set(plot=True,keys=plot_keys)
+          for t in plot_keys.keys():
+            Data_Proc.plotter(data=dict_reorder(process_params,'data',True),
+                              domain=dict_reorder(process_params,'domain',True),
+                              plot_props=plot_params,
+                              data_key=t)
+                            
+        Data_Proc.plot_save(data_params,label=plot_label)
 
         # Pause before exiting
         input('Press [Enter] to exit')
@@ -456,17 +373,18 @@ if __name__ == '__main__':
                                     'T_other'],
                     # 'data_sets': data_sets,
                     'data_types': ['train','test','other'],
-                    'data_wrapper': lambda v,i: array_sort(v,i,0,'ndarray'),
                     'data_format': 'npz',
-                    'label_titles':['T>Tc','T<Tc'],
                     'data_dir': 'dataset/',
                     'one_hot': [True,'y_'],
                     'upconvert': True,
                     'data_lists': True
                    }
 
-    process_params = {'acc_train':{ 'domain':['other','epochs'],'data': [],
+    process_params = {'acc_train':{'domain':[],'data': [],
+                                'data_name': 'Training Accuracy',
+                                'domain_name': 'Epochs',
                                 'data_type': 'train',
+                                'domain_type': ['other','epochs'],
                                 'plot_type': 'Training and Testing',
                                 'labels':[],
                                 'function': lambda x_,y_,y_est: 
@@ -474,8 +392,11 @@ if __name__ == '__main__':
                                                       tf.argmax(y_est,axis=1),
                                                       tf.argmax(y_,axis=1)), 
                                                       tf.float32))},
-                  'acc_test': { 'domain':['other','T_other'],'data': [],
+                  'acc_test': { 'domain':[],'data': [],
+                                'data_name': 'Testing Accuracy',
+                                'domain_name': 'Epochs',
                                 'data_type': 'test',
+                                'domain_type': ['other','epochs'],
                                 'plot_type': 'Training and Testing',
                                 'labels':[],
                                 'function': lambda x_,y_,y_est: 
@@ -483,74 +404,67 @@ if __name__ == '__main__':
                                                       tf.argmax(y_est,axis=1),
                                                       tf.argmax(y_,axis=1)), 
                                                       tf.float32))},
-                  'y_equiv':  { 'domain':['other','T_other'],'data': [],
+                  'cost': { 'domain':[],'data': [],
+                                'data_name': 'Cost',
+                                'domain_name': 'Epochs',
                                 'data_type': 'train',
+                                'domain_type': ['other','epochs'],
+                                'plot_type': 'Training and Testing',
+                                'labels':[],
+                                'function': lambda x_,y_,y_est,eps= 10**(-8): 
+                                               -tf.reduce_sum(
+                                               y_*tf.log(y_est+eps) +
+                                               (1.0-y_)*tf.log(1.0-y_est +eps),
+                                               axis=1)},
+                  'y_equiv':  { 'domain':[],'data': [],
+                                'data_name': 'Average Output',
+                                'domain_name': 'Temperature',
+                                'data_type': 'test',
+                                'domain_type': ['other','T_other'],
                                 'plot_type': 'Model Predictions',
                                 'labels':[],
+                                'data_wrapper': lambda v,i: array_sort(v,i,0,
+                                                        'ndarray'),
                                 'function': lambda x_,y_,y_est: tf.equal(
                                                  tf.argmax(y_est,axis=1),
                                                  tf.argmax(y_,axis=1))},
-                  'y_est':    { 'domain':['other','T_other'],'data': [],
-                                'data_type': 'train',
+                  'y_est':    { 'domain':[],'data': [],
+                                'data_name': 'Phase Label',
+                                'domain_name': 'Temperature',
+                                'data_type': 'test',
+                                'domain_type': ['other','T_other'],
                                 'plot_type': 'Model Predictions',
                                 'labels':['T>Tc','T<Tc'],
+                                'data_wrapper': lambda v,i: array_sort(v,i,0,
+                                                            'ndarray'),
                                 'function': lambda x_,y_,y_est: y_est},
                   'y_grad':   { 'domain':['train','x_train'],'data': [],
-                                'data_type': 'train',
-                                'plot_type': 'Training and Testing',
+                                'data_name': 'Output Gradient',
+                                'domain_name': 'Temperature',
+                                'data_type': 'test',
+                                'domain_type': ['other','T_other'],
+                                'plot_type': 'Model Predictions',
                                 'labels':[],
+                                'data_wrapper': lambda v,i: array_sort(v,i,0,
+                                                        'ndarray'),
                                 'function': lambda x_,y_,y_est:
-                                                      tf.gradients(y_est,x_)}
+                                        tf.math.reduce_sum(tf.gradients(
+                                              y_est,x_),axis=[0,-1])}
                   }
 
 
 
-    kwargs = {'train':True,'test':True,'other':True,
-              'plot':True,'save':True,'printit':True,'timeit':True}
+    kwargs = {'train':True, 'test':True, 'other':True,
+              'plot':{'plot_loop':False,'Training and Testing':True,
+                      'Model Predictions':True,'Gradients':True},
+              'save':True, 'printit':False, 'timeit':False}
 
-
-    # plot_params = {
-    #      k: {
-        
-    #       'ax':   {'title' : '',
-    #                 'xlabel': 'Epochs' if k 
-    #                            not in results_keys['other'] 
-    #                            else 
-    #                            caps(str(data_keys['other'][0]
-    #                                 ).replace('_other','')), 
-    #                 'ylabel': caps(k,True,split_char='_')
-    #                 },
-          
-    #       'plot':  {'marker':'*','color':np.random.rand(3)},
-          
-    #       'data':  {'plot_type':'plot'},
-                    
-    #       'other': {'label': lambda x='':x,
-    #                 'plot_legend':True if k == 'y_est' else False,
-    #                 'sup_legend': False,
-    #                 'sup_title': {'t': 'Optimization Parameters:'\
-    #                                '\n \n'+ 
-    #                                '\n'.join([str(caps(k,True,
-    #                                               split_char='_'))+
-    #                                 ':  '+line_break(str(
-    #                                   self.alg_params[k]),15,
-    #                                   line_space=' '*int(
-    #                                             2.5*len(str(k))))
-    #                                      for i,k in enumerate(
-    #                                      sorted(list(
-    #                                      self.alg_params.keys())))]),
-    #                               'x':0.925,'y':0.97,'ha':'left',
-    #                               'fontsize':7},
-    #                   'pause':0.01
-    #                 }
-    #      }
-    #     for k in process_params.keys()}
 
     # Neural Network Parameters    
     network_params = {
                   'n_neuron': [None,100,None], 
                   'alpha_learn': 0.0035, 'eta_reg': 0.0005,'sigma_var':0.1,                  
-                  'n_epochs': 5,'n_batch_train': 1/10,'n_epochs_meas': 1/50,
+                  'n_epochs': 100,'n_batch_train': 1/10,'n_epochs_meas': 1/50,
                   'cost_func': 'cross_entropy', 'optimize_func':'adam',
                   'regularize':'L2',
                   'method': 'neural_network',
@@ -560,38 +474,75 @@ if __name__ == '__main__':
                    'output': tf.nn.sigmoid
                               },
                    'cost_functions': {
-                     'cross_entropy': lambda y_label,y_est,eps= 10**(-8): 
+                     'cross_entropy': lambda x_,y_,y_est,eps= 10**(-8): 
                                      -tf.reduce_sum(
-                                     y_label*tf.log(y_est+eps) +
-                                     (1.0-y_label)*tf.log(1.0-y_est +eps),
+                                     y_*tf.log(y_est+eps) +
+                                     (1.0-y_)*tf.log(1.0-y_est +eps),
                                      axis=1),
                                              
-                      'mse': lambda y_label,y_est: (1/2)*(
-                                    tf.reduce_sum(tf.square(y_est-y_label),
+                      'mse': lambda x_,y_,y_est: (1/2)*(
+                                    tf.reduce_sum(tf.square(y_est-y_),
                                     axis=1)),
                       
-                      'entropy_logits': lambda y_label,y_est: 
+                      'entropy_logits': lambda x_,y_,y_est: 
                               tf.nn.sigmoid_cross_entropy_with_logits(
-                                             labels=y_label, logits=y_est),
-                      'L2': lambda var,eta_reg: tf.add_n([ tf.nn.l2_loss(v) 
-                                         for v in var]) * eta_reg
+                                             labels=y_, logits=y_est),
+                      'L2': lambda **kwargs: tf.add_n([ tf.nn.l2_loss(v) 
+                                    for v in kwargs['var']]) * kwargs['eta_reg']
                             },
                                   
-                  'optimize_functions': {'grad': lambda cost,alpha_learn: 
+                  'optimize_functions': {'grad': lambda cost,**kwargs: 
                                         tf.train.GradientDescentOptimizer(
                                                     alpha_learn).minimize(cost),
-                                 'adam': lambda cost,alpha_learn: 
+                                 'adam': lambda cost,**kwargs: 
                                         tf.train.AdamOptimizer(
-                                                    alpha_learn).minimize(cost)
+                                         kwargs['alpha_learn']).minimize(cost)
                             },
                            
                   }
   
+    # Plot Parameters
+    plot_params = {
+                     key: {
+                    
+                      'ax':   {'title' : '',
+                               'xlabel':caps(process_params[key]['domain_name'],
+                                                True,split_char='_'), 
+                                'ylabel': caps(process_params[key]['data_name'],
+                                                True,split_char='_'), 
+                                },
+                      
+                      'plot':  {'marker':'*' ,
+                                'color':np.random.rand(3) if (
+                                          key != 'y_est') else None},
+                      
+                      'data':  {'plot_type':'plot'},
+                                
+                      'other': {'label': lambda x='':x,
+                                'plot_legend':True if key == 'y_est' else False,
+                                'sup_legend': False,
+                                'sup_title': {'t': 'Optimization Parameters:'\
+                                               '\n \n'+ 
+                                               '\n'.join([str(caps(k,True,
+                                                              split_char='_'))+
+                                                ':  '+line_break(str(v),15,
+                                                  line_space=' '*int(
+                                                            2.5*len(str(k))))
+                                                     for i,(k,v) in enumerate(
+                                                     sorted(list(
+                                                    network_params.items())))]),
+                                              'x':0.925,'y':0.97,'ha':'left',
+                                              'fontsize':7},
+                                  'pause':0.01
+                                }
+                     }
+                    for key in process_params.keys()}
     
     
     
-    # Run Neural Network   
+    # Run Neural Network
+    data_struct = 0   
     nn = optimizer(network_params)
-    nn.training(data_params,**kwargs)
+    nn.training(data_params,plot_params,**kwargs)
     
     
