@@ -80,9 +80,9 @@ class optimizer(object):
                       'data_lists': True
                      },
                      plot_params={},
-                     train = True, test = False, other=False,
+                     train=True,
                      timeit = True, printit=True,
-                     save = True, plot = False):
+                     save = True, plot = False,**kwargs):
     
         # Initialize Network Data and Parameters
         data_struct = 0
@@ -101,18 +101,22 @@ class optimizer(object):
         
         display(True,True,'Data Imported...%s'%data_size)
 
-                
         for t in data_params['data_types']:
             if not any(t in key for key in data.keys()):
-                setattr(locals(), t, False)
+                try:
+                  setattr(locals(), t, False)
+                except AttributeError:
+                  kwargs[t] = False
         
         
         
         # Define Number of Neurons at Input and Output
+        train_keys = list(data_typed[data_params['data_types'][0]].keys())
+        test_keys = list(data_typed[data_params['data_types'][1]].keys())
         self.alg_params['n_dataset_train'],self.alg_params['n_neuron'][0] = (
-                                                          data_size['x_train'])
-        self.alg_params['n_neuron'][-1] = data_size['y_train'][1]
-        self.alg_params['n_dataset_test'] = data_size.get('x_test',[None])[0]
+                                        data_size[train_keys[0]])
+        self.alg_params['n_neuron'][-1] = data_size[train_keys[1]][1]
+        self.alg_params['n_dataset_test'] = data_size.get(test_keys[0],[None])[0]
         
         # Define Training Parameters
         self.alg_params['n_batch_train'] = max(1,
@@ -251,14 +255,24 @@ class optimizer(object):
 
 
         # Train Model
-        if train:
-
+        if vars().get('train',kwargs.get('train')):
             epoch_range = range(self.alg_params['n_epochs'])
             dataset_range = np.arange(self.alg_params['n_dataset_train'])
             batch_range = range(0,self.alg_params['n_dataset_train'],
                                     self.alg_params['n_batch_train'])
 
             
+            # # Check if Training and Testing Data Exists
+            # data_typed_keys = ['train','test']
+            # for t in data_typed.keys():
+            #   if all([i in t for i in data_typed_keys]):
+            #     break
+            #   if data_typed_keys[0] in t and not data_typed_keys[1] in t:
+            #     data_typed
+            # if not data_typed.get('train'):
+            #   if not data_typed.get('test')
+
+
             # Train Model over n_epochs with Gradient Descent 
             for epoch in epoch_range:
 
@@ -271,7 +285,8 @@ class optimizer(object):
                     # Choose Random Batch of data                    
                     sess_run(train_step,{k:d[dataset_range,:][i_batch:
                                    i_batch + self.alg_params['n_batch_train'],:]
-                                   for k,d in data_typed['train'].items()})
+                                   for k,d in data_typed[
+                                   data_params['data_types'][0]].items()})
                 
             
                 # Record Results every n_epochs_meas
@@ -282,9 +297,8 @@ class optimizer(object):
                     data_typed['other']['epochs'] = epoch+1
               
                     for key,process in process_params.items():
-                        if vars().get(process['data_type']):
-                          # print('key val shape',key,np.shape(sess_run(process['function'](x_,y_,y_est),
-                          #     index_nested(data_typed,process['data_type']))))
+                        if (vars().get(process['data_type']) is not False) and (
+                            kwargs.get(process['data_type']) is not False) :
                           y,x = process.get('data_wrapper',
                               lambda y,x:(y,x))(
                               sess_run(process['function'](x_,y_,y_est),
@@ -292,20 +306,33 @@ class optimizer(object):
                               index_nested(data_typed,process['domain_type']))
                           x = np.reshape(x,(-1))
 
-
-                          if np.ndim(y) > 2:
+                          if y.dtype=='object':
+                            if all([((np.ndim(yi)>1) and 
+                                    (1 not in np.shape(yi)[1:])) for yi in y]):
                               y = {
-                                    t: np.reshape(np.mean(np.take(y,j,-1),
-                                                                  -1),(-1))
+                                    t: np.array([np.reshape(
+                                                np.mean(np.take(yi,j,-1),-1),
+                                                (-1)) for yi in y])
                                     for j,t in enumerate(process.get('labels',
                                                     [process['data_name']]))}
                               x = {t: x for t in process.get('labels',
                                                     [process['data_name']])}
+                            else:
+                              y = np.reshape(np.array(
+                                          [np.mean(yi,-1) for yi in y]),(-1))
+
+                          elif np.ndim(y) > 2:
+                            y = {
+                                  t: np.reshape(np.mean(np.take(y,j,-1),
+                                                                -1),(-1))
+                                  for j,t in enumerate(process.get('labels',
+                                                  [process['data_name']]))}
+                            x = {t: x for t in process.get('labels',
+                                                    [process['data_name']])}
                           elif np.ndim(y) == 2:
                             y = np.reshape(np.mean(y,-1),(-1))
 
-                          
-                          if (np.size(x) > 1 or np.size(y) > 1) or (
+                          if ((np.size(x) > 1 ) or (np.size(y) > 1 )) or (
                             isinstance(x,dict) and isinstance(y,dict)):
                             process['data'] = y
                             process['domain'] = x
@@ -363,15 +390,19 @@ if __name__ == '__main__':
     
 
     # Dataset Parameters
-    data_params =  {'data_files': ['x_train','y_train','x_test','y_test',
+    data_params =  {'data_files': ['x_test','y_test',
                                     'T_other'],
-                    # 'data_sets': data_sets,
+                    # 'data_sets': ['x_train','y_train','x_test','y_test',
+                    #                 'T_other'],
                     'data_types': ['train','test','other'],
                     'data_format': 'npz',
                     'data_dir': 'dataset/',
                     'one_hot': [True,'y_'],
                     'upconvert': True,
-                    'data_lists': True
+                    'data_lists': True,
+                    'data_seed':{ 'train':{'seed_type':'test',
+                                  'seed_dimensions':[0,np.random.choice(9999,8000,replace=False)],
+                                  'remove_seed':True}}
                    }
 
     process_params = {'acc_train':{'domain':[],'data': [],
@@ -389,7 +420,7 @@ if __name__ == '__main__':
                   'acc_test': { 'domain':[],'data': [],
                                 'data_name': 'Testing Accuracy',
                                 'domain_name': 'Epochs',
-                                'data_type': 'test',
+                                'data_type': 'train',
                                 'domain_type': ['other','epochs'],
                                 'plot_type': 'Training and Testing',
                                 'labels':[],
@@ -432,12 +463,12 @@ if __name__ == '__main__':
                                 'data_wrapper': lambda v,i: array_sort(v,i,0,
                                                             'ndarray'),
                                 'function': lambda x_,y_,y_est: y_est},
-                  'y_grad':   { 'domain':['train','x_train'],'data': [],
+                  'y_grad':   { 'domain':[],'data': [],
                                 'data_name': 'Output Gradient',
                                 'domain_name': 'Temperature',
                                 'data_type': 'test',
                                 'domain_type': ['other','T_other'],
-                                'plot_type': 'Model Predictions',
+                                'plot_type': 'Gradients',
                                 'labels':[],
                                 'data_wrapper': lambda v,i: array_sort(v,i,0,
                                                         'ndarray'),
