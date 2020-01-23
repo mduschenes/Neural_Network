@@ -9,7 +9,7 @@ Created on Tue May  1 05:13:09 2018
 
 import tensorflow as tf
 import numpy as np
-from misc_functions import display
+from misc_functions import DISPLAY
 
 def neural_network(alg_params):
         
@@ -190,7 +190,7 @@ def tsne():
         P = np.maximum(P, 1e-12)
     
         # Run iterations
-        display(True,True,'Iterations for t-SNE')
+        DISPLAY().display(True,True,'Iterations for t-SNE')
         for i in range(max_iter):
     
             # Compute pairwise affinities

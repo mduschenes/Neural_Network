@@ -15,11 +15,11 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 #from matplotlib.ticker import MaxNLocator
 
 # Define Figure Font Properties
-FONT_SIZE = 22
+FONT_SIZE = 12
 matplotlib.rcParams['text.usetex'] = False
 matplotlib.rcParams['axes.labelsize']  = FONT_SIZE
 #rcParams['figure.figsize']  = fig_size
-matplotlib.rcParams['font.family']     = 'serif'
+# matplotlib.rcParams['font.family']     = 'serif'
 matplotlib.rcParams['font.serif']      = ['Computer Modern']
 matplotlib.rcParams['font.size']   = FONT_SIZE
 #rcParams['legend.fontsize'] = 9
@@ -201,23 +201,34 @@ def set_props(plot,fig,ax,plot_props):
 		if '_attr' in prop:
 			obj = locals()[prop.replace('_attr','')]
 			for k,p in plot_props[prop].items():
-				if not callable(p):
-					p0 = p
-					p = lambda a: p0
-				if 'get_' in k:
-					obj_k = getattr(obj,k)()
+				if any(t in k for t in ['get_','set_']):
+					if not callable(p):
+						p0 = p.copy()
+						p = lambda a: p0
+				
+					try:
+						obj_k = getattr(obj,k)()
+						plt.setp(obj_k,**p(plt.getp(obj,
+									 k.replace('get_','').replace('set_',''))))
+					except TypeError:
+						print(k,obj_k)
+						plt.setp(obj_k,**p(k))
 				else:
 					obj_k = getattr(obj,k)
-					
-				plt.setp(obj_k,**p(plt.getp(obj,k.replace('get_',''))));
+					plt.setp(obj_k,**p)
+				
+				
+				
+				
 		else:
 			obj = locals().get(prop,None)
 			prop_obj = plot_props.get(prop,{})
 			for p in prop_obj.copy():
 				if callable(prop_obj[p]):
 					prop_obj[p] = prop_obj.pop(p)(plt.getp(obj,p))
-			
-			plt.setp(obj,**prop_obj);
+			for p,v in prop_obj.items():
+				plt.setp(obj,**{p:v})
+			# plt.setp(obj,**prop_obj)
 
 	# Pause
 	plt.pause(plot_props['other'].get('pause',0.01))
@@ -273,7 +284,8 @@ def get_props(data,domain,key,plot_props):
 			
 			cmap.set_bad(color = cbar_props.get('color_bad', 'magenta'))
 			plot_props.get('plot',{})['cmap'] = cmap
-			#plot_props.get('plot',{})['norm'] = MidpointNormalize(cbar_props.get('midpoint'))
+			#plot_props.get('plot',{})['norm'] = MidpointNormalize(
+				# cbar_props.get('midpoint'))
 			
 
 		
@@ -287,10 +299,14 @@ def get_props(data,domain,key,plot_props):
 
 	y = np.squeeze(plot_props.get('data',{}).get('data_process',
 								lambda x:np.real(x))(data))
-	
-	x = np.squeeze(plot_props.get('data',{}).get('domain_process',
-								lambda x:np.real(x))(domain))
 
+	if domain is None or None in domain:
+		x = np.arange(np.size(y))
+	else:
+		x = np.squeeze(plot_props.get('data',{}).get('domain_process',
+								lambda x:np.real(x))(domain))
+		
+	# print(key,x,np.shape(y))
 	return y,x, plot_props.get('plot',{})
 	
 #def cursor_annotate(plot,leg,fig,ax):

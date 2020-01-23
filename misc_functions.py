@@ -12,22 +12,28 @@ import time,argparse,re,copy
 
 ##### Model Functions ########
 
-times = [time.clock()]
-def display(print_it=True,time_it=True,m='',
+class DISPLAY(object):
+	def __init__(self):
+		self.time = [time.time()]
+		return
+	
+	def display(self,print_it=True,time_it=True,m='',
 			t0=-2,line_break=0,line_tab=0,time_check=False):
 	
-	line_break *= '\n' 
-	line_tab *= '\t'
-	m = line_tab+str_check(m)
-	
-	if time_it or time_check:
-		times.append(time.clock())
-		if print_it and not time_check:
-			print(m,times[-1]-times[t0],line_break)
+		line_break *= '\n' 
+		line_tab *= '\t'
+		m = line_tab+str_check(m)
+		
+		if time_it or time_check:
+			self.time.append(time.time())
+			if print_it and not time_check:
+				print(m,self.time[-1]-self.time[t0],line_break)
+			elif print_it:
+				print(m,line_break)
 		elif print_it:
 			print(m,line_break)
-	elif print_it:
-		print(m,line_break)
+
+		return
 
 
 
@@ -54,14 +60,18 @@ def caps(word,every_word=False,sep_char=' ',split_char=' '):
 
 	try:
 		if every_word is False:
-			return capitalize(word) 
+			if sep_char == split_char:
+				return capitalize(word) 
+			else:
+				return capitalize(sep_char.join(
+									[w for w in word.split(split_char)]))
 		elif every_word is True:
 			word_sep = sep_char.join([capitalize(w)
 								 for w in word.split(split_char)])
 			return sep_char.join([capitalize(w)
 								 for w in word_sep.split(sep_char)])
 		else:
-			return sep_char.join([w for w in word.split(sep_char)])
+			return sep_char.join([w for w in word.split(split_char)])
 	except IndexError:
 		return word
 
@@ -187,6 +197,8 @@ def list_sort_unique(a,j):
 	return a
 
 def index_nested(a,i):
+	if i is None:
+		return None
 	i = np.atleast_1d(i)
 	if len(i) > 1:
 		return index_nested(a[i[0]],i[1:])
@@ -261,9 +273,9 @@ def dict_reorder(d,keys=None,return_inner=False):
 			keys = list(set([k for k in d.values()]))
 		keys = np.atleast_1d(keys)
 		if return_inner and len(keys) == 1:
-			return [k for k,v in d.items() if v == keys[0]]
+			return [k for k,v in d.items() if v == keys[0] or keys[0] in v]
 		else:
-			return {key: [k for k,v in d.items() if v == key] for key in keys}	
+			return {key: [k for k,v in d.items() if v == key or key in v] for key in keys}	
 		return d
 
 
